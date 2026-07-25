@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.LaserArrows" parent="android:Theme.Material.NoActionBar" />
+</resources>

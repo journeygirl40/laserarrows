@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 曲がるレーザービームのシルエット -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M32,78 L32,54 L76,54 L76,32" />
+    <!-- 発射元:矢印(Shooter) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,66 L42,82 L22,82 Z" />
+    <!-- 着弾先:光る球(Receiver) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M76,32 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <!-- 着弾の瞬間のきらめき -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M85,23 L91,17 M85,41 L91,47 M67,23 L61,17 M67,41 L61,47" />
+</vector>

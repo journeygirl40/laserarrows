@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 曲がるレーザービーム(白コア) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M32,78 L32,54 L76,54 L76,32" />
+    <!-- レーザービーム(発射時のオレンジ→紫→着弾のシアンへ色が変わっていく、太く半透明) -->
+    <path
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillAlpha="0.88"
+        android:pathData="M32,78 L32,54 L76,54 L76,32">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="32"
+                android:startY="78"
+                android:endX="76"
+                android:endY="32"
+                android:startColor="#FF9500"
+                android:centerColor="#7C5CFF"
+                android:endColor="#4DD9FF" />
+        </aapt:attr>
+    </path>
+    <!-- 発射元:矢印(Shooter) -->
+    <path
+        android:fillColor="#FF9500"
+        android:pathData="M32,66 L42,82 L22,82 Z" />
+    <!-- 着弾先:光る球(Receiver)の外側のぼんやりした光暈 -->
+    <path
+        android:fillColor="#4DD9FF"
+        android:fillAlpha="0.30"
+        android:pathData="M76,32 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0" />
+    <!-- 着弾先:光る球(Receiver)本体 -->
+    <path
+        android:fillColor="#4DD9FF"
+        android:pathData="M76,32 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <!-- 着弾の瞬間のきらめき -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M85,23 L91,17 M85,41 L91,47 M67,23 L61,17 M67,41 L61,47" />
+</vector>
