@@ -71,6 +71,15 @@ fun LevelListOverlay(
             matchesFilter && !(excludePerfect && isPerfect)
         }
     }
+    // スコア・コンボはレベルをまたいで引き継がれる仕様なので、レベルNの理論上の最高得点は
+    // 「レベル1からノーミスで積み上げたコンボのままレベルNもノーミスだった場合の累積点」で計算する。
+    val cumulativeMaxScore = remember(upperBound) {
+        var pairs = 0
+        (1..upperBound).associateWith { lv ->
+            pairs += PuzzleGenerator.levelSize(lv).numPairs
+            ScoreRules.maxScoreForPairs(pairs)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -151,6 +160,7 @@ fun LevelListOverlay(
                         cleared = lv in clearedLevels,
                         bestLivesLost = levelBestLivesLost[lv],
                         bestScore = levelBestScore[lv],
+                        maxScore = cumulativeMaxScore[lv] ?: 0,
                         isNext = lv == maxLv + 1,
                         onClick = { onSelectLevel(lv) },
                     )
@@ -185,10 +195,10 @@ private fun LevelListItem(
     cleared: Boolean,
     bestLivesLost: Int?,
     bestScore: Int?,
+    maxScore: Int,
     isNext: Boolean,
     onClick: () -> Unit,
 ) {
-    val maxScore = remember(level) { ScoreRules.maxScoreForPairs(PuzzleGenerator.levelSize(level).numPairs) }
     val shape = RoundedCornerShape(16.dp)
     val borderColor = when {
         isNext -> Neon2

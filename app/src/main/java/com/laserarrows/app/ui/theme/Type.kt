@@ -6,7 +6,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.journeygirl.laserarrows.R
+import com.laserarrows.app.R
 
 val SpaceGroteskFontFamily = FontFamily(
     Font(R.font.space_grotesk_regular, FontWeight.Normal),

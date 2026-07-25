@@ -12,15 +12,15 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.journeygirl.laserarrows"
+    namespace = "com.laserarrows.app"
     compileSdk = 35
 
     defaultConfig {
         applicationId = "com.journeygirl.laserarrows"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -67,6 +67,8 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.play.app.update.ktx)
+    implementation(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

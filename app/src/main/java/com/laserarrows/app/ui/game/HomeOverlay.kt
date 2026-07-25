@@ -16,6 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -50,6 +54,8 @@ fun HomeOverlay(
     onShowEditor: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var confirmingRestart by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -128,7 +134,18 @@ fun HomeOverlay(
                             onClick = onResume,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        GhostButton("🔄 最初から", onClick = onStart, modifier = Modifier.fillMaxWidth())
+                        GhostButton(
+                            text = if (confirmingRestart) "本当に最初からやり直す？(現在の進行状況は消えます)" else "🔄 最初から",
+                            onClick = {
+                                if (confirmingRestart) {
+                                    confirmingRestart = false
+                                    onStart()
+                                } else {
+                                    confirmingRestart = true
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                     hasProgress -> {
                         NeonButton(
