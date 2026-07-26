@@ -7,21 +7,24 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 data class BestRecord(val level: Int = 1, val score: Int = 0)
 
-data class ImportHistoryEntry(val code: String, val memo: String, val importedAt: Long)
+data class ImportHistoryEntry(val code: String, val memo: String, val importedAt: Long, val level: Int? = null)
 
 private val Context.progressDataStore by preferencesDataStore(name = "laserarrows_progress")
 
 class ProgressStore(private val context: Context) {
     private val bestLevelKey = intPreferencesKey("best_level")
     private val bestScoreKey = intPreferencesKey("best_score")
+    private val bestLevelReachedKey = intPreferencesKey("best_level_reached")
     private val clearedLevelsKey = stringPreferencesKey("cleared_levels")
     private val importHistoryKey = stringPreferencesKey("import_history")
     private val levelBestLivesLostKey = stringPreferencesKey("level_best_lives_lost")
     private val levelBestScoreKey = stringPreferencesKey("level_best_score")
+    private val activeRunKey = stringPreferencesKey("active_run")
 
     val best: Flow<BestRecord> = context.progressDataStore.data.map { prefs ->
         BestRecord(
@@ -43,6 +46,18 @@ class ProgressStore(private val context: Context) {
         context.progressDataStore.edit { prefs ->
             prefs[bestLevelKey] = record.level
             prefs[bestScoreKey] = record.score
+        }
+    }
+
+    /** 「ハイスコア」とは独立した、これまでに到達した最も深いレベル(クリアできたかは問わない)。一度上がった記録は下がらない。 */
+    val bestLevelReached: Flow<Int> = context.progressDataStore.data.map { prefs ->
+        prefs[bestLevelReachedKey] ?: 1
+    }
+
+    suspend fun recordLevelReached(level: Int) {
+        context.progressDataStore.edit { prefs ->
+            val current = prefs[bestLevelReachedKey] ?: 1
+            if (level > current) prefs[bestLevelReachedKey] = level
         }
     }
 
@@ -94,6 +109,19 @@ class ProgressStore(private val context: Context) {
         }
     }
 
+    /** プレイ中のラン(盤面・ライフ・スコア等)を保存する。アプリのプロセスが落ちても「再開する」で復元できるようにするため。 */
+    suspend fun saveActiveRun(serialized: String?) {
+        context.progressDataStore.edit { prefs ->
+            if (serialized == null) {
+                prefs.remove(activeRunKey)
+            } else {
+                prefs[activeRunKey] = serialized
+            }
+        }
+    }
+
+    suspend fun loadActiveRun(): String? = context.progressDataStore.data.first()[activeRunKey]
+
     private fun encodeLevelIntMap(map: Map<Int, Int>): String =
         map.entries.joinToString(",") { (level, value) -> "$level:$value" }
 
@@ -112,10 +140,10 @@ class ProgressStore(private val context: Context) {
         decodeImportHistory(prefs[importHistoryKey])
     }
 
-    suspend fun addImportHistory(code: String, memo: String) {
+    suspend fun addImportHistory(code: String, memo: String, level: Int? = null) {
         context.progressDataStore.edit { prefs ->
             val current = decodeImportHistory(prefs[importHistoryKey])
-            val updated = (listOf(ImportHistoryEntry(code, memo, System.currentTimeMillis())) + current)
+            val updated = (listOf(ImportHistoryEntry(code, memo, System.currentTimeMillis(), level)) + current)
                 .take(MAX_IMPORT_HISTORY)
             prefs[importHistoryKey] = encodeImportHistory(updated)
         }
@@ -129,21 +157,33 @@ class ProgressStore(private val context: Context) {
         }
     }
 
+    suspend fun updateImportHistoryMemo(importedAt: Long, memo: String) {
+        context.progressDataStore.edit { prefs ->
+            val current = decodeImportHistory(prefs[importHistoryKey])
+            val updated = current.map { entry ->
+                if (entry.importedAt == importedAt) entry.copy(memo = memo) else entry
+            }
+            prefs[importHistoryKey] = encodeImportHistory(updated)
+        }
+    }
+
     private fun encodeImportHistory(entries: List<ImportHistoryEntry>): String = entries.joinToString("\n") { entry ->
         val memoB64 = Base64.encodeToString(entry.memo.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        "${entry.importedAt}|${entry.code}|$memoB64"
+        "${entry.importedAt}|${entry.code}|$memoB64|${entry.level ?: ""}"
     }
 
     private fun decodeImportHistory(raw: String?): List<ImportHistoryEntry> {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split("\n").mapNotNull { line ->
-            val parts = line.split("|", limit = 3)
-            if (parts.size != 3) return@mapNotNull null
+            // 旧形式(levelフィールド無し)との互換のため、末尾のlevelは無くても読み込めるようにする。
+            val parts = line.split("|", limit = 4)
+            if (parts.size < 3) return@mapNotNull null
             val importedAt = parts[0].toLongOrNull() ?: return@mapNotNull null
             val memo = runCatching {
                 String(Base64.decode(parts[2], Base64.NO_WRAP), Charsets.UTF_8)
             }.getOrDefault("")
-            ImportHistoryEntry(code = parts[1], memo = memo, importedAt = importedAt)
+            val level = parts.getOrNull(3)?.toIntOrNull()
+            ImportHistoryEntry(code = parts[1], memo = memo, importedAt = importedAt, level = level)
         }
     }
 

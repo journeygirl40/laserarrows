@@ -24,6 +24,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,8 +43,36 @@ class GameViewModel(
 
     init {
         viewModelScope.launch {
+            val restored = progressStore.loadActiveRun()?.let { deserializeActiveRun(it) }
+            if (restored != null) {
+                _uiState.update { current ->
+                    restored.copy(
+                        bestLevel = current.bestLevel,
+                        bestScore = current.bestScore,
+                        bestLevelReached = current.bestLevelReached,
+                        clearedLevels = current.clearedLevels,
+                        levelBestLivesLost = current.levelBestLivesLost,
+                        levelBestScore = current.levelBestScore,
+                        importHistory = current.importHistory,
+                    )
+                }
+            }
+            // プレイ中の盤面・ライフ・スコア等を都度保存し、アプリのプロセスが落ちても「再開する」で復元できるようにする。
+            // 復元処理より前に監視を始めると、復元前の初期状態を保存して既存のデータを消してしまうため、必ず復元後に開始する。
+            launch {
+                uiState.map { serializeActiveRun(it) }.distinctUntilChanged().collect { serialized ->
+                    progressStore.saveActiveRun(serialized)
+                }
+            }
+        }
+        viewModelScope.launch {
             progressStore.best.collect { best ->
                 _uiState.update { it.copy(bestLevel = best.level, bestScore = best.score) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.bestLevelReached.collect { level ->
+                _uiState.update { it.copy(bestLevelReached = level) }
             }
         }
         viewModelScope.launch {
@@ -96,7 +126,15 @@ class GameViewModel(
             },
         )
     }
-    fun gameOverHome() = _uiState.update { it.copy(overlay = if (it.isEditorTest) Overlay.Editor else Overlay.Home) }
+    fun gameOverHome() = _uiState.update {
+        it.copy(
+            overlay = when {
+                it.isEditorTest -> Overlay.Editor
+                it.isImported -> Overlay.Favorites
+                else -> Overlay.Home
+            },
+        )
+    }
 
     /** プレイ中にいつでもホームへ(自作パズルのテストプレイ中はエディタへ)。盤面・スコア・ライフ等はそのまま保持し、後で再開できる。 */
     fun goHome() {
@@ -130,6 +168,8 @@ class GameViewModel(
 
     fun consumeToast() = _uiState.update { it.copy(toast = null) }
     fun consumeComboPopup() = _uiState.update { it.copy(comboPopup = null) }
+    fun consumeHighScorePopup() = _uiState.update { it.copy(highScorePopup = null) }
+    fun consumeLevelRecordPopup() = _uiState.update { it.copy(levelRecordPopup = null) }
 
     private fun newRun(startLevel: Int) {
         _uiState.update {
@@ -138,6 +178,7 @@ class GameViewModel(
                 level = startLevel,
                 bestLevel = it.bestLevel,
                 bestScore = it.bestScore,
+                bestLevelReached = it.bestLevelReached,
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
@@ -155,18 +196,29 @@ class GameViewModel(
                 PuzzleGenerator.generate(size.rows, size.cols, size.numPairs)
             }
             val remaining = board.tiles.values.count { it is Tile.Receiver }
+            // 過去の最深到達レベルを超えた瞬間は「まだ誰も(自分すら)見たことのない領域」として一度だけ大きく祝う。
+            val enteringNewLevelRecord = level > _uiState.value.bestLevelReached
             _uiState.update {
                 it.copy(
                     board = board,
                     remainingReceivers = remaining,
                     busy = false,
                     history = emptyList(),
-                    levelSnapshot = LevelSnapshot(board, it.lives, it.score),
+                    levelSnapshot = LevelSnapshot(board, it.lives, it.score, it.combo),
                     overlay = Overlay.None,
                     hasActiveRun = true,
                     isImported = false,
                     isEditorTest = false,
+                    crossedLevelRecordThisRun = it.crossedLevelRecordThisRun || enteringNewLevelRecord,
+                    levelRecordPopup = if (enteringNewLevelRecord) {
+                        LevelRecordPopup(level, token = System.nanoTime())
+                    } else {
+                        it.levelRecordPopup
+                    },
                 )
+            }
+            if (enteringNewLevelRecord) {
+                progressStore.recordLevelReached(level)
             }
         }
     }
@@ -182,7 +234,9 @@ class GameViewModel(
         val current = _uiState.value
         val board = current.levelSnapshot?.board ?: current.board
         val code = BoardCode.encode(board)
-        viewModelScope.launch { progressStore.addImportHistory(code, memo) }
+        // お気に入りボタンは実レベルのプレイ後にしか出さないため、current.levelがそのまま盤面の由来レベルになる。
+        val level = current.level.takeIf { !current.isImported }
+        viewModelScope.launch { progressStore.addImportHistory(code, memo, level) }
         showToast("⭐ お気に入りに登録しました")
     }
 
@@ -207,13 +261,18 @@ class GameViewModel(
             return
         }
         viewModelScope.launch { progressStore.addImportHistory(code, memo) }
-        applyImportedBoard(board)
+        applyImportedBoard(board, level = null)
     }
 
     /** お気に入りから1件削除する。 */
     fun removeFavorite(entry: ImportHistoryEntry) {
         viewModelScope.launch { progressStore.removeImportHistory(entry.importedAt) }
         showToast("🗑 お気に入りから削除しました")
+    }
+
+    /** お気に入りのメモ欄を書き換える。 */
+    fun updateFavoriteMemo(entry: ImportHistoryEntry, memo: String) {
+        viewModelScope.launch { progressStore.updateImportHistoryMemo(entry.importedAt, memo) }
     }
 
     /** お気に入りから選んだ盤面を再度プレイ開始する(履歴への再記録はしない)。 */
@@ -223,24 +282,27 @@ class GameViewModel(
             showToast("コードを読み取れませんでした", isDanger = true)
             return
         }
-        applyImportedBoard(board)
+        applyImportedBoard(board, level = entry.level)
     }
 
-    private fun applyImportedBoard(board: Board) {
+    private fun applyImportedBoard(board: Board, level: Int?) {
         val remaining = board.tiles.values.count { it is Tile.Receiver }
+        // 由来レベルが分からない盤面(生コードの読み込み等)は、ペア数からおおよその相当レベルを逆算して見せる。
+        val displayLevel = level ?: PuzzleGenerator.estimateLevelForBoard(board)
         _uiState.update {
             GameUiState(
                 overlay = Overlay.None,
-                level = it.level,
+                level = displayLevel,
                 bestLevel = it.bestLevel,
                 bestScore = it.bestScore,
+                bestLevelReached = it.bestLevelReached,
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
-                levelSnapshot = LevelSnapshot(board, GameUiState().lives, GameUiState().score),
+                levelSnapshot = LevelSnapshot(board, GameUiState().lives, GameUiState().score, GameUiState().combo),
                 hasActiveRun = true,
                 isImported = true,
             )
@@ -294,19 +356,21 @@ class GameViewModel(
             showToast("光る球を1つ以上置いてください", isDanger = true)
             return
         }
+        val displayLevel = PuzzleGenerator.estimateLevelForBoard(board)
         _uiState.update {
             GameUiState(
                 overlay = Overlay.None,
-                level = it.level,
+                level = displayLevel,
                 bestLevel = it.bestLevel,
                 bestScore = it.bestScore,
+                bestLevelReached = it.bestLevelReached,
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
-                levelSnapshot = LevelSnapshot(board, GameUiState().lives, GameUiState().score),
+                levelSnapshot = LevelSnapshot(board, GameUiState().lives, GameUiState().score, GameUiState().combo),
                 hasActiveRun = true,
                 isImported = true,
                 isEditorTest = true,
@@ -375,11 +439,12 @@ class GameViewModel(
         val current = _uiState.value
         val hitKey = shot.result.hit
         if (hitKey != null) {
-            val newCombo = current.combo + 1
-            val gained = ScoreRules.shotScore(newCombo)
             val originTile = current.board.tiles[shot.originKey] ?: return
             val hitTile = current.board.tiles[hitKey] ?: return
             val wasReceiver = hitTile is Tile.Receiver
+            // 矢印(Shooter)同士が同色でぶつかった場合は、見た目上はタイルが消えても「狙った接続」ではないため失敗扱いにする(コンボは繋げない・得点も与えない)。
+            val newCombo = if (wasReceiver) current.combo + 1 else 0
+            val gained = if (wasReceiver) ScoreRules.shotScore(newCombo) else 0
             val entry = HistoryEntry(
                 removedAPos = shot.originKey,
                 removedATile = originTile,
@@ -387,9 +452,14 @@ class GameViewModel(
                 removedBTile = hitTile,
                 gained = gained,
                 wasReceiver = wasReceiver,
+                previousCombo = current.combo,
             )
             val newBoard = current.board.remove(shot.originKey).remove(hitKey)
             val newRemaining = current.remainingReceivers - (if (wasReceiver) 1 else 0)
+            val newScore = current.score + gained
+            // 自己ベストが0(初回プレイ等)の場合は「更新」演出に値しないので鳴らさない。既にこのランで一度鳴らした後は再度は鳴らさない。
+            val justBeatHighScore = gained > 0 && !current.crossedHighScoreThisRun && current.bestScore > 0 &&
+                current.score <= current.bestScore && newScore > current.bestScore
             if (wasReceiver) {
                 sfxEngine.playConnect(newCombo)
             } else {
@@ -398,14 +468,23 @@ class GameViewModel(
             _uiState.update {
                 it.copy(
                     board = newBoard,
-                    score = it.score + gained,
+                    score = newScore,
                     combo = newCombo,
                     history = it.history + entry,
                     remainingReceivers = newRemaining,
                     busy = false,
                     activeShot = null,
-                    comboPopup = if (newCombo >= 2) ComboPopup(newCombo, token = System.nanoTime()) else null,
+                    comboPopup = if (wasReceiver && newCombo >= 2) ComboPopup(newCombo, token = System.nanoTime()) else null,
+                    crossedHighScoreThisRun = it.crossedHighScoreThisRun || justBeatHighScore,
+                    highScorePopup = if (justBeatHighScore) {
+                        HighScorePopup(newScore, token = System.nanoTime())
+                    } else {
+                        it.highScorePopup
+                    },
                 )
+            }
+            if (!wasReceiver) {
+                showToast("⚡ 矢印同士がぶつかった(コンボが途切れました)", isDanger = true)
             }
             if (newRemaining <= 0) {
                 viewModelScope.launch {
@@ -442,7 +521,7 @@ class GameViewModel(
             it.copy(
                 board = newBoard,
                 score = it.score - last.gained,
-                combo = 0,
+                combo = last.previousCombo,
                 lives = newLives,
                 remainingReceivers = it.remainingReceivers + (if (last.wasReceiver) 1 else 0),
                 history = it.history.dropLast(1),
@@ -468,7 +547,7 @@ class GameViewModel(
                 board = snapshot.board,
                 lives = newLives,
                 score = snapshot.score,
-                combo = 0,
+                combo = snapshot.combo,
                 history = emptyList(),
                 busy = false,
                 remainingReceivers = snapshot.board.tiles.values.count { t -> t is Tile.Receiver },
@@ -546,9 +625,7 @@ class GameViewModel(
         val livesLost = ((current.levelSnapshot?.lives ?: current.lives) - current.lives).coerceAtLeast(0)
 
         if (!current.isImported) {
-            val newBest = if (current.level > current.bestLevel ||
-                (current.level == current.bestLevel && totalScore > current.bestScore)
-            ) {
+            val newBest = if (totalScore > current.bestScore) {
                 BestRecord(current.level, totalScore)
             } else {
                 BestRecord(current.bestLevel, current.bestScore)
@@ -581,14 +658,62 @@ class GameViewModel(
         val current = _uiState.value
         val beatBest = current.score >= current.bestScore
         if (!current.isImported && current.score > current.bestScore) {
-            val newBest = BestRecord(
-                level = if (current.level > current.bestLevel) current.level else current.bestLevel,
-                score = current.score,
-            )
+            val newBest = BestRecord(level = current.level, score = current.score)
             viewModelScope.launch { progressStore.saveBest(newBest) }
             _uiState.update { it.copy(bestLevel = newBest.level, bestScore = newBest.score) }
         }
         _uiState.update { it.copy(overlay = Overlay.GameOver(beatBest), hasActiveRun = false) }
+    }
+
+    /** 進行中のラン(自作パズルのテストプレイを除く)を復元可能な形へシリアライズする。runが無ければnull。 */
+    private fun serializeActiveRun(state: GameUiState): String? {
+        if (!state.hasActiveRun || state.isEditorTest || state.lives <= 0) return null
+        val snapshot = state.levelSnapshot ?: return null
+        return listOf(
+            state.level,
+            state.score,
+            state.combo,
+            state.lives,
+            state.isImported,
+            snapshot.lives,
+            snapshot.score,
+            snapshot.combo,
+            BoardCode.encode(state.board),
+            BoardCode.encode(snapshot.board),
+            state.crossedHighScoreThisRun,
+            state.crossedLevelRecordThisRun,
+        ).joinToString("|")
+    }
+
+    private fun deserializeActiveRun(raw: String): GameUiState? {
+        val parts = raw.split("|")
+        if (parts.size != 12) return null
+        val level = parts[0].toIntOrNull() ?: return null
+        val score = parts[1].toIntOrNull() ?: return null
+        val combo = parts[2].toIntOrNull() ?: return null
+        val lives = parts[3].toIntOrNull() ?: return null
+        val isImported = parts[4] == "true"
+        val snapshotLives = parts[5].toIntOrNull() ?: return null
+        val snapshotScore = parts[6].toIntOrNull() ?: return null
+        val snapshotCombo = parts[7].toIntOrNull() ?: return null
+        val board = BoardCode.decode(parts[8]) ?: return null
+        val snapshotBoard = BoardCode.decode(parts[9]) ?: return null
+        val crossedHighScoreThisRun = parts[10] == "true"
+        val crossedLevelRecordThisRun = parts[11] == "true"
+        return GameUiState(
+            overlay = Overlay.Home,
+            level = level,
+            score = score,
+            combo = combo,
+            lives = lives,
+            board = board,
+            remainingReceivers = board.tiles.values.count { it is Tile.Receiver },
+            levelSnapshot = LevelSnapshot(snapshotBoard, snapshotLives, snapshotScore, snapshotCombo),
+            hasActiveRun = true,
+            isImported = isImported,
+            crossedHighScoreThisRun = crossedHighScoreThisRun,
+            crossedLevelRecordThisRun = crossedLevelRecordThisRun,
+        )
     }
 
     private fun showToast(text: String, isDanger: Boolean = false) {

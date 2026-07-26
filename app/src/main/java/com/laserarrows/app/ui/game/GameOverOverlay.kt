@@ -20,23 +20,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
+import com.laserarrows.app.ui.theme.EmberColor
 import com.laserarrows.app.ui.theme.GoldColor
+import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
+import kotlin.math.max
 
 @Composable
 fun GameOverOverlay(
     level: Int,
     score: Int,
+    bestScoreBeforeRun: Int,
     beatBest: Boolean,
+    crossedLevelRecord: Boolean,
     isEditorTest: Boolean,
+    isImported: Boolean,
     onHome: () -> Unit,
     onAddToFavorites: (memo: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val homeLabel = when {
+        isEditorTest -> "✏️ 編集に戻る"
+        isImported -> "⭐ お気に入りに戻る"
+        else -> "🏠 ホームへ"
+    }
     var addingFavorite by remember { mutableStateOf(false) }
     var addedFavorite by remember { mutableStateOf(false) }
     var memo by remember { mutableStateOf("") }
+
+    // ニアミス訴求:僅差で更新を逃した時ほど「もう一回」を誘う効果が高い(ギャンブル心理学で言うニアミス効果)。
+    val scoreGap = bestScoreBeforeRun - score
+    val isNearMiss = !beatBest && bestScoreBeforeRun > 0 && scoreGap > 0 &&
+        scoreGap <= max(15, (bestScoreBeforeRun * 0.2).toInt())
 
     Column(
         modifier = modifier.padding(24.dp).verticalScroll(rememberScrollState()),
@@ -50,35 +66,48 @@ fun GameOverOverlay(
             color = TextPrimary,
         )
         Text("到達レベル: $level ・ スコア: ${score}点", fontSize = 12.5.sp, color = TextMuted)
+        if (isNearMiss) {
+            Text(
+                "あと${scoreGap}点でハイスコア更新だった！惜しい！",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = EmberColor,
+            )
+        }
+        if (crossedLevelRecord) {
+            RecordChip("🚀 Lv.$level 到達レベル記録更新", Neon2)
+        }
 
-        when {
-            addedFavorite -> {
-                Text("⭐ お気に入りに登録しました", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GoldColor)
-            }
-            addingFavorite -> {
-                OutlinedTextField(
-                    value = memo,
-                    onValueChange = { memo = it },
-                    placeholder = { Text("メモ(任意・例:誰との対戦か)", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.widthIn(max = 280.dp),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton(
-                        "⭐ 登録する",
-                        onClick = {
-                            onAddToFavorites(memo)
-                            addedFavorite = true
-                        },
-                    )
-                    GhostButton("キャンセル", onClick = { addingFavorite = false; memo = "" })
+        if (!isImported) {
+            when {
+                addedFavorite -> {
+                    Text("⭐ お気に入りに登録しました", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GoldColor)
                 }
-            }
-            else -> {
-                GhostButton("⭐ お気に入りへ登録", onClick = { addingFavorite = true })
+                addingFavorite -> {
+                    OutlinedTextField(
+                        value = memo,
+                        onValueChange = { memo = it },
+                        placeholder = { Text("メモ(任意・例:誰との対戦か)", fontSize = 13.sp) },
+                        singleLine = true,
+                        modifier = Modifier.widthIn(max = 280.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GhostButton(
+                            "⭐ 登録する",
+                            onClick = {
+                                onAddToFavorites(memo)
+                                addedFavorite = true
+                            },
+                        )
+                        GhostButton("キャンセル", onClick = { addingFavorite = false; memo = "" })
+                    }
+                }
+                else -> {
+                    GhostButton("⭐ お気に入りへ登録", onClick = { addingFavorite = true })
+                }
             }
         }
 
-        GhostButton(if (isEditorTest) "✏️ 編集に戻る" else "🏠 ホームへ", onClick = onHome)
+        GhostButton(homeLabel, onClick = onHome)
     }
 }

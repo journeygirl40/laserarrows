@@ -1,5 +1,7 @@
 package com.laserarrows.app
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -71,6 +73,10 @@ class MainActivity : ComponentActivity() {
                                 runCatching { availableUpdate?.startFlexibleUpdate(updateResultLauncher) }
                                 updateUiState = AppUpdateUiState.None
                             },
+                            onOpenStoreClick = {
+                                openPlayStoreListing()
+                                updateUiState = AppUpdateUiState.None
+                            },
                             onInstallClick = {
                                 lifecycleScope.launch { runCatching { downloadedUpdate?.completeUpdate() } }
                             },
@@ -79,6 +85,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /** Playストアアプリでこのアプリのページを開く(未インストールならブラウザにフォールバック)。 */
+    private fun openPlayStoreListing() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
+        }.recoverCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
         }
     }
 }

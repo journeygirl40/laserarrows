@@ -3,7 +3,6 @@ package com.laserarrows.app.ui.game
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,7 +38,6 @@ import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.Bg3
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
-import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon1
 import com.laserarrows.app.ui.theme.Neon2
@@ -61,15 +57,15 @@ fun LevelListOverlay(
 ) {
     val maxLv = clearedLevels.maxOrNull() ?: 0
     val upperBound = maxOf(maxLv + 1, 30)
-    var filterInput by remember { mutableStateOf("") }
     var excludePerfect by remember { mutableStateOf(false) }
+    var sortDescending by remember { mutableStateOf(true) }
     var confirmingReset by remember { mutableStateOf(false) }
-    val visibleLevels = remember(upperBound, filterInput, excludePerfect, clearedLevels, levelBestLivesLost) {
-        (1..upperBound).filter { lv ->
-            val matchesFilter = filterInput.isBlank() || lv.toString().startsWith(filterInput)
+    val visibleLevels = remember(upperBound, excludePerfect, sortDescending, clearedLevels, levelBestLivesLost) {
+        val base = (1..upperBound).filter { lv ->
             val isPerfect = lv in clearedLevels && (levelBestLivesLost[lv] == null || levelBestLivesLost[lv] == 0)
-            matchesFilter && !(excludePerfect && isPerfect)
+            !(excludePerfect && isPerfect)
         }
+        if (sortDescending) base.sortedDescending() else base
     }
     // スコア・コンボはレベルをまたいで引き継がれる仕様なので、レベルNの理論上の最高得点は
     // 「レベル1からノーミスで積み上げたコンボのままレベルNもノーミスだった場合の累積点」で計算する。
@@ -114,40 +110,43 @@ fun LevelListOverlay(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(GlassFill, RoundedCornerShape(20.dp))
-                    .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                OutlinedTextField(
-                    value = filterInput,
-                    onValueChange = { filterInput = it.filter(Char::isDigit) },
-                    placeholder = { Text("レベル番号で絞り込み", fontSize = 13.sp) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clickable { excludePerfect = !excludePerfect }
-                    .background(
-                        if (excludePerfect) GoldColor.copy(alpha = 0.18f) else Color.Transparent,
-                        RoundedCornerShape(999.dp),
-                    )
-                    .border(1.dp, if (excludePerfect) GoldColor else GlassBorder, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    "✨ パーフェクトを除外",
-                    fontSize = 12.sp,
-                    fontWeight = if (excludePerfect) FontWeight.Bold else FontWeight.Normal,
-                    color = if (excludePerfect) GoldColor else TextMuted,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { sortDescending = !sortDescending }
+                        .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
+                        .border(1.dp, Neon2, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        if (sortDescending) "⬇ 新しい順" else "⬆ 古い順",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Neon2,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { excludePerfect = !excludePerfect }
+                        .background(
+                            if (excludePerfect) GoldColor.copy(alpha = 0.18f) else Color.Transparent,
+                            RoundedCornerShape(999.dp),
+                        )
+                        .border(1.dp, if (excludePerfect) GoldColor else GlassBorder, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        "✨ パーフェクトを除外",
+                        fontSize = 12.sp,
+                        fontWeight = if (excludePerfect) FontWeight.Bold else FontWeight.Normal,
+                        color = if (excludePerfect) GoldColor else TextMuted,
+                    )
+                }
             }
 
             LazyColumn(

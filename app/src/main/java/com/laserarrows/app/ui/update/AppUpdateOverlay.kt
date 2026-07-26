@@ -39,6 +39,7 @@ sealed class AppUpdateUiState {
 fun AppUpdateOverlay(
     state: AppUpdateUiState,
     onUpdateClick: () -> Unit,
+    onOpenStoreClick: () -> Unit,
     onInstallClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -60,6 +61,7 @@ fun AppUpdateOverlay(
                         Text("🚀 新しいバージョンがあります", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                         Text("更新しますか？", fontSize = 13.sp, color = TextMuted)
                         NeonButton("更新する", onClick = onUpdateClick, modifier = Modifier.fillMaxWidth())
+                        GhostButton("🛒 ストアで開く", onClick = onOpenStoreClick, modifier = Modifier.fillMaxWidth())
                         GhostButton("あとで", onClick = onDismiss, modifier = Modifier.fillMaxWidth())
                     }
                 }

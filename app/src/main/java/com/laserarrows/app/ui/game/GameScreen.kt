@@ -1,6 +1,7 @@
 package com.laserarrows.app.ui.game
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -62,15 +63,45 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         }
     }
 
+    LaunchedEffect(uiState.highScorePopup?.token) {
+        if (uiState.highScorePopup != null) {
+            delay(1200)
+            viewModel.consumeHighScorePopup()
+        }
+    }
+
+    LaunchedEffect(uiState.levelRecordPopup?.token) {
+        if (uiState.levelRecordPopup != null) {
+            delay(1200)
+            viewModel.consumeLevelRecordPopup()
+        }
+    }
+
     val hasProgress = uiState.clearedLevels.isNotEmpty()
     val nextLevel = (uiState.clearedLevels.maxOrNull() ?: 0) + 1
     val context = LocalContext.current
 
+    // ホーム画面(overlayスタックの一番外側)以外では、Android標準の「戻る」ボタンでアプリごと終了させず、
+    // 各画面のonBack相当の処理に委ねる。ホーム画面ではfalseにしてシステム標準の挙動(アプリ終了)に任せる。
+    BackHandler(enabled = uiState.overlay != Overlay.Home) {
+        when (uiState.overlay) {
+            Overlay.Home -> Unit
+            Overlay.Editor -> viewModel.editorBack()
+            Overlay.LevelList -> viewModel.listBack()
+            Overlay.Favorites -> viewModel.favoritesBack()
+            Overlay.Import -> viewModel.importBack()
+            is Overlay.ColorPick, is Overlay.DirectionPick -> viewModel.cancelLightPick()
+            is Overlay.Clear -> viewModel.clearHome()
+            is Overlay.GameOver -> viewModel.gameOverHome()
+            Overlay.None -> viewModel.goHome()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             uiState.overlay == Overlay.Home -> HomeOverlay(
-                bestLevel = uiState.bestLevel,
                 bestScore = uiState.bestScore,
+                bestLevelReached = uiState.bestLevelReached,
                 hasProgress = hasProgress,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
@@ -123,6 +154,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 },
                 onDelete = { viewModel.removeFavorite(it) },
+                onEditMemo = { entry, newMemo -> viewModel.updateFavoriteMemo(entry, newMemo) },
                 onAddNew = { viewModel.goImport() },
                 onExportAll = {
                     val text = viewModel.exportFavorites()
@@ -192,6 +224,9 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 score = uiState.score,
                 comboMultiplier = uiState.comboMultiplier,
                 lives = uiState.lives,
+                bestScore = uiState.bestScore,
+                crossedHighScore = uiState.crossedHighScoreThisRun,
+                inLevelRecordTerritory = uiState.crossedLevelRecordThisRun,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -276,6 +311,24 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                         }
                     }
 
+                    uiState.highScorePopup?.let { popup ->
+                        key(popup.token) {
+                            HighScorePopupView(
+                                score = popup.score,
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+                            )
+                        }
+                    }
+
+                    uiState.levelRecordPopup?.let { popup ->
+                        key(popup.token) {
+                            LevelRecordPopupView(
+                                level = popup.level,
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+                            )
+                        }
+                    }
+
                     if (uiState.overlay != Overlay.None) {
                         GlassSurface(
                             shape = RoundedCornerShape(22.dp),
@@ -295,14 +348,21 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                         livesLost = overlay.livesLost,
                                         isEditorTest = uiState.isEditorTest,
                                         isImported = uiState.isImported,
+                                        crossedHighScore = uiState.crossedHighScoreThisRun,
+                                        crossedLevelRecord = uiState.crossedLevelRecordThisRun,
+                                        level = uiState.level,
                                         onNext = { viewModel.clearNext() },
                                         onHome = { viewModel.clearHome() },
+                                        onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
                                     )
                                     is Overlay.GameOver -> GameOverOverlay(
                                         level = uiState.level,
                                         score = uiState.score,
+                                        bestScoreBeforeRun = uiState.bestScore,
                                         beatBest = overlay.beatBest,
+                                        crossedLevelRecord = uiState.crossedLevelRecordThisRun,
                                         isEditorTest = uiState.isEditorTest,
+                                        isImported = uiState.isImported,
                                         onHome = { viewModel.gameOverHome() },
                                         onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
                                     )

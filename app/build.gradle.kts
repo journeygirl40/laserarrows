@@ -13,14 +13,14 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.laserarrows.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.journeygirl.laserarrows"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 3
-        versionName = "2.1"
+        targetSdk = 36
+        versionCode = 4
+        versionName = "2.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

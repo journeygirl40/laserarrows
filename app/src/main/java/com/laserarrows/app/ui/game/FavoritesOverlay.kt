@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,17 +33,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.data.ImportHistoryEntry
 import com.laserarrows.app.engine.BoardCode
+import com.laserarrows.app.engine.PuzzleGenerator
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.Bg3
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GoldColor
+import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.PurpleAccent
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
@@ -54,6 +60,7 @@ fun FavoritesOverlay(
     onSelect: (ImportHistoryEntry) -> Unit,
     onShare: (ImportHistoryEntry) -> Unit,
     onDelete: (ImportHistoryEntry) -> Unit,
+    onEditMemo: (ImportHistoryEntry, String) -> Unit,
     onAddNew: () -> Unit,
     onExportAll: () -> Unit,
     onBack: () -> Unit,
@@ -142,6 +149,7 @@ fun FavoritesOverlay(
                             onClick = { onSelect(entry) },
                             onShare = { onShare(entry) },
                             onDelete = { onDelete(entry) },
+                            onEditMemo = { newMemo -> onEditMemo(entry, newMemo) },
                         )
                     }
                 }
@@ -168,13 +176,30 @@ private fun FavoriteItem(
     onClick: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    onEditMemo: (String) -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val dateText = remember(entry.importedAt) {
         SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(entry.importedAt))
     }
     val board = remember(entry.code) { BoardCode.decode(entry.code) }
+    val displayLevel = remember(entry.level, board) {
+        entry.level ?: board?.let { PuzzleGenerator.estimateLevelForBoard(it) }
+    }
     var confirmingDelete by remember(entry.importedAt) { mutableStateOf(false) }
+    var editingMemo by remember(entry.importedAt) { mutableStateOf(false) }
+    var memoText by remember(entry.importedAt) { mutableStateOf(entry.memo) }
+
+    fun saveMemo() {
+        onEditMemo(memoText.trim())
+        editingMemo = false
+    }
+
+    fun cancelMemo() {
+        memoText = entry.memo
+        editingMemo = false
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -183,7 +208,7 @@ private fun FavoriteItem(
                 shape,
             )
             .border(1.dp, GoldColor.copy(alpha = 0.4f), shape)
-            .clickable(onClick = onClick)
+            .then(if (editingMemo) Modifier else Modifier.clickable(onClick = onClick))
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(
@@ -201,34 +226,86 @@ private fun FavoriteItem(
                     BoardPreview(board = board, modifier = Modifier.fillMaxSize())
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
+            if (editingMemo) {
+                OutlinedTextField(
+                    value = memoText,
+                    onValueChange = { memoText = it },
+                    placeholder = { Text("メモ", fontSize = 13.sp) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { saveMemo() }),
+                    modifier = Modifier.weight(1f),
+                )
                 Text(
-                    entry.memo.ifBlank { "(メモなし)" },
-                    fontSize = 15.sp,
+                    "✓",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
-                    maxLines = 1,
+                    modifier = Modifier
+                        .clickable { saveMemo() }
+                        .padding(6.dp),
                 )
-                Text(dateText, fontSize = 11.5.sp, color = TextMuted)
-            }
-            Text(
-                "📤",
-                fontSize = 16.sp,
-                modifier = Modifier
-                    .clickable { onShare() }
-                    .padding(6.dp),
-            )
-            Text(
-                if (confirmingDelete) "削除？" else "🗑",
-                fontSize = if (confirmingDelete) 12.sp else 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (confirmingDelete) DangerColor else TextPrimary,
-                modifier = Modifier
-                    .clickable {
-                        if (confirmingDelete) onDelete() else confirmingDelete = true
+                Text(
+                    "✕",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    modifier = Modifier
+                        .clickable { cancelMemo() }
+                        .padding(6.dp),
+                )
+            } else {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            entry.memo.ifBlank { "(メモなし)" },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (displayLevel != null) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                            ) {
+                                Text("Lv.$displayLevel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Neon2)
+                            }
+                        }
                     }
-                    .padding(6.dp),
-            )
+                    Text(dateText, fontSize = 11.5.sp, color = TextMuted)
+                }
+                Text(
+                    "✏️",
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .clickable {
+                            memoText = entry.memo
+                            editingMemo = true
+                        }
+                        .padding(6.dp),
+                )
+                Text(
+                    "📤",
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .clickable { onShare() }
+                        .padding(6.dp),
+                )
+                Text(
+                    if (confirmingDelete) "削除？" else "🗑",
+                    fontSize = if (confirmingDelete) 12.sp else 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (confirmingDelete) DangerColor else TextPrimary,
+                    modifier = Modifier
+                        .clickable {
+                            if (confirmingDelete) onDelete() else confirmingDelete = true
+                        }
+                        .padding(6.dp),
+                )
+            }
         }
     }
 }

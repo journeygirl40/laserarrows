@@ -33,6 +33,24 @@ object PuzzleGenerator {
         return LevelSize(rows, cols, numPairs)
     }
 
+    /** レベル生成では使わない、逆引き専用の上限(この段階を超えるとペア数上限が頭打ちになるため)。 */
+    private const val MAX_ESTIMATE_LEVEL = 200
+
+    /**
+     * お気に入り・インポートした盤面など「実際に生成されたレベル」が分からない盤面について、
+     * ペア数からおおよそ何レベル相当の難易度かを逆算する(一覧・HUD表示用)。
+     */
+    fun estimateLevelForPairCount(numPairs: Int): Int {
+        var level = 1
+        while (levelSize(level).numPairs < numPairs && level < MAX_ESTIMATE_LEVEL) {
+            level++
+        }
+        return level
+    }
+
+    fun estimateLevelForBoard(board: Board): Int =
+        estimateLevelForPairCount(board.tiles.values.count { it is Tile.Receiver })
+
     private fun directionBetween(a: CellPos, b: CellPos): Direction? = when {
         a.row == b.row && a.col != b.col -> if (b.col > a.col) Direction.R else Direction.L
         a.col == b.col && a.row != b.row -> if (b.row > a.row) Direction.D else Direction.U

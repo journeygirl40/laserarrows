@@ -19,6 +19,8 @@ val GoldColor = Color(0xFFFFD23F)
 val Neon1 = Color(0xFF7C5CFF)
 val Neon2 = Color(0xFF4DD9FF)
 val PurpleAccent = Color(0xFFA855F7)
+/** 「あと少し」を煽るニアミス演出用(危険=ピンクでも成功=ゴールドでもない、焦らせる橙)。 */
+val EmberColor = Color(0xFFFF9500)
 
 fun LaserColor.toComposeColor(): Color = when (this) {
     LaserColor.RED -> Color(0xFFFF3B30)

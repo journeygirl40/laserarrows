@@ -15,9 +15,10 @@ data class HistoryEntry(
     val removedBTile: Tile,
     val gained: Int,
     val wasReceiver: Boolean,
+    val previousCombo: Int,
 )
 
-data class LevelSnapshot(val board: Board, val lives: Int, val score: Int)
+data class LevelSnapshot(val board: Board, val lives: Int, val score: Int, val combo: Int = 0)
 
 data class ShotAnimation(
     val originKey: CellPos,
@@ -31,6 +32,12 @@ data class ShotAnimation(
 data class ToastMessage(val text: String, val isDanger: Boolean = false, val token: Long = 0L)
 
 data class ComboPopup(val combo: Int, val token: Long = 0L)
+
+/** プレイ中にハイスコアを初めて上回った瞬間に一度だけ発火する演出。 */
+data class HighScorePopup(val score: Int, val token: Long = 0L)
+
+/** プレイ中、これまでの最深到達レベルを初めて超えた瞬間に一度だけ発火する演出。 */
+data class LevelRecordPopup(val level: Int, val token: Long = 0L)
 
 enum class EditorTool { ERASER, SHOOTER, RECEIVER }
 
@@ -57,8 +64,13 @@ data class GameUiState(
     val activeShot: ShotAnimation? = null,
     val toast: ToastMessage? = null,
     val comboPopup: ComboPopup? = null,
+    val highScorePopup: HighScorePopup? = null,
+    val levelRecordPopup: LevelRecordPopup? = null,
+    val crossedHighScoreThisRun: Boolean = false,
+    val crossedLevelRecordThisRun: Boolean = false,
     val bestLevel: Int = 1,
     val bestScore: Int = 0,
+    val bestLevelReached: Int = 1,
     val clearedLevels: Set<Int> = emptySet(),
     val levelBestLivesLost: Map<Int, Int> = emptyMap(),
     val levelBestScore: Map<Int, Int> = emptyMap(),

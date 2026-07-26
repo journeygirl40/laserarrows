@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,17 +32,17 @@ import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.Bg3
-import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon1
+import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.PurpleAccent
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
 
 @Composable
 fun HomeOverlay(
-    bestLevel: Int,
     bestScore: Int,
+    bestLevelReached: Int,
     hasProgress: Boolean,
     nextLevel: Int,
     hasActiveRun: Boolean,
@@ -106,18 +107,33 @@ fun HomeOverlay(
                     color = TextMuted,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier
-                        .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
-                        .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 18.dp, vertical = 9.dp),
-                ) {
-                    Text(
-                        "自己ベスト  Lv.$bestLevel ・ ${bestScore}点",
-                        fontSize = 12.5.sp,
-                        color = GoldColor,
-                        fontWeight = FontWeight.Bold,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .background(GoldColor.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
+                            .border(1.dp, GoldColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                    ) {
+                        Text(
+                            "🏆 ハイスコア ${bestScore}点",
+                            fontSize = 12.sp,
+                            color = GoldColor,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(Neon2.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
+                            .border(1.dp, Neon2.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                    ) {
+                        Text(
+                            "🚀 到達 Lv.$bestLevelReached",
+                            fontSize = 12.sp,
+                            color = Neon2,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
 
