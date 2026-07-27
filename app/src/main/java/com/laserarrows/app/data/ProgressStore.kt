@@ -12,7 +12,14 @@ import kotlinx.coroutines.flow.map
 
 data class BestRecord(val level: Int = 1, val score: Int = 0)
 
-data class ImportHistoryEntry(val code: String, val memo: String, val importedAt: Long, val level: Int? = null)
+data class ImportHistoryEntry(
+    val code: String,
+    val memo: String,
+    val importedAt: Long,
+    val level: Int? = null,
+    /** この盤面をお気に入りとしてプレイした中で最も少なかった消費ライフ数(0ならパーフェクト、nullなら一度もクリアしていない)。 */
+    val bestLivesLost: Int? = null,
+)
 
 private val Context.progressDataStore by preferencesDataStore(name = "laserarrows_progress")
 
@@ -140,11 +147,27 @@ class ProgressStore(private val context: Context) {
         decodeImportHistory(prefs[importHistoryKey])
     }
 
-    suspend fun addImportHistory(code: String, memo: String, level: Int? = null) {
+    suspend fun addImportHistory(code: String, memo: String, level: Int? = null, importedAt: Long = System.currentTimeMillis()) {
         context.progressDataStore.edit { prefs ->
             val current = decodeImportHistory(prefs[importHistoryKey])
-            val updated = (listOf(ImportHistoryEntry(code, memo, System.currentTimeMillis(), level)) + current)
+            val updated = (listOf(ImportHistoryEntry(code, memo, importedAt, level)) + current)
                 .take(MAX_IMPORT_HISTORY)
+            prefs[importHistoryKey] = encodeImportHistory(updated)
+        }
+    }
+
+    /** お気に入りの盤面をクリアした際に、そのエントリの最良記録(最少消費ライフ数)を更新する。一度良くなった評価は下がらない。 */
+    suspend fun recordFavoriteClear(importedAt: Long, livesLost: Int) {
+        context.progressDataStore.edit { prefs ->
+            val current = decodeImportHistory(prefs[importHistoryKey])
+            val updated = current.map { entry ->
+                if (entry.importedAt != importedAt) {
+                    entry
+                } else {
+                    val existing = entry.bestLivesLost
+                    if (existing == null || livesLost < existing) entry.copy(bestLivesLost = livesLost) else entry
+                }
+            }
             prefs[importHistoryKey] = encodeImportHistory(updated)
         }
     }
@@ -169,21 +192,22 @@ class ProgressStore(private val context: Context) {
 
     private fun encodeImportHistory(entries: List<ImportHistoryEntry>): String = entries.joinToString("\n") { entry ->
         val memoB64 = Base64.encodeToString(entry.memo.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        "${entry.importedAt}|${entry.code}|$memoB64|${entry.level ?: ""}"
+        "${entry.importedAt}|${entry.code}|$memoB64|${entry.level ?: ""}|${entry.bestLivesLost ?: ""}"
     }
 
     private fun decodeImportHistory(raw: String?): List<ImportHistoryEntry> {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split("\n").mapNotNull { line ->
-            // 旧形式(levelフィールド無し)との互換のため、末尾のlevelは無くても読み込めるようにする。
-            val parts = line.split("|", limit = 4)
+            // 旧形式(level/bestLivesLostフィールド無し)との互換のため、末尾のフィールドは無くても読み込めるようにする。
+            val parts = line.split("|", limit = 5)
             if (parts.size < 3) return@mapNotNull null
             val importedAt = parts[0].toLongOrNull() ?: return@mapNotNull null
             val memo = runCatching {
                 String(Base64.decode(parts[2], Base64.NO_WRAP), Charsets.UTF_8)
             }.getOrDefault("")
             val level = parts.getOrNull(3)?.toIntOrNull()
-            ImportHistoryEntry(code = parts[1], memo = memo, importedAt = importedAt, level = level)
+            val bestLivesLost = parts.getOrNull(4)?.toIntOrNull()
+            ImportHistoryEntry(code = parts[1], memo = memo, importedAt = importedAt, level = level, bestLivesLost = bestLivesLost)
         }
     }
 

@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.play.app.update.ktx)
+    implementation(libs.play.services.ads)
     implementation(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit)

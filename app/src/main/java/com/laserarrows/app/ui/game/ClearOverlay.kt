@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,19 +56,19 @@ fun ClearOverlay(
     var memo by remember { mutableStateOf("") }
 
     Column(
-        modifier = modifier.padding(24.dp).verticalScroll(rememberScrollState()),
+        modifier = modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("✨ CLEAR!", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+        Text("✨ CLEAR!", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
         Text("スコア ${totalScore}点", fontSize = 12.5.sp, color = TextMuted)
         Box(
             modifier = Modifier
                 .background(badgeColor.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
                 .border(1.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
         ) {
-            Text(badgeText, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = badgeColor)
+            Text(badgeText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = badgeColor)
         }
         if (!isImported && (crossedHighScore || crossedLevelRecord)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,9 +110,13 @@ fun ClearOverlay(
                 }
             }
 
-            NeonButton("次のレベルへ", onClick = onNext)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NeonButton("次のレベルへ", onClick = onNext, modifier = Modifier.weight(1f))
+                GhostButton(homeLabel, onClick = onHome, modifier = Modifier.weight(1f))
+            }
+        } else {
+            GhostButton(homeLabel, onClick = onHome)
         }
-        GhostButton(homeLabel, onClick = onHome)
     }
 }
 

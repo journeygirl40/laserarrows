@@ -274,6 +274,22 @@ private fun FavoriteItem(
                                 Text("Lv.$displayLevel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Neon2)
                             }
                         }
+                        if (entry.bestLivesLost != null) {
+                            val perfect = entry.bestLivesLost == 0
+                            val clearColor = if (perfect) GoldColor else DangerColor
+                            Box(
+                                modifier = Modifier
+                                    .background(clearColor.copy(alpha = 0.16f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    if (perfect) "✨ パーフェクト" else "💔×${entry.bestLivesLost}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = clearColor,
+                                )
+                            }
+                        }
                     }
                     Text(dateText, fontSize = 11.5.sp, color = TextMuted)
                 }

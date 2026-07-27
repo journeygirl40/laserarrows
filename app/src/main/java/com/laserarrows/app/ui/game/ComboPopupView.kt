@@ -30,9 +30,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun ComboPopupView(combo: Int, modifier: Modifier = Modifier) {
     val tier = when {
-        combo >= 10 -> ComboTier("MEGA COMBO", DangerColor, 44.sp)
-        combo >= 5 -> ComboTier("SUPER COMBO", EmberColor, 39.sp)
-        else -> ComboTier("COMBO", GoldColor, 34.sp)
+        combo >= 10 -> ComboTier("MEGA COMBO", DangerColor, 26.sp)
+        combo >= 5 -> ComboTier("SUPER COMBO", EmberColor, 23.sp)
+        else -> ComboTier("COMBO", GoldColor, 20.sp)
     }
     val scale = remember { Animatable(0.2f) }
     val alpha = remember { Animatable(1f) }
@@ -53,6 +53,8 @@ fun ComboPopupView(combo: Int, modifier: Modifier = Modifier) {
             fontSize = tier.fontSize,
             fontWeight = FontWeight.Black,
             color = tier.color,
+            maxLines = 1,
+            softWrap = false,
             style = LocalTextStyle.current.copy(
                 shadow = Shadow(color = tier.color.copy(alpha = 0.8f), blurRadius = 24f),
             ),

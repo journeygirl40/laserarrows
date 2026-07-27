@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
+import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.theme.EmberColor
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon2
@@ -38,6 +39,7 @@ fun GameOverOverlay(
     isImported: Boolean,
     onHome: () -> Unit,
     onAddToFavorites: (memo: String) -> Unit,
+    onWatchAdToRevive: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val homeLabel = when {
@@ -77,6 +79,8 @@ fun GameOverOverlay(
         if (crossedLevelRecord) {
             RecordChip("🚀 Lv.$level 到達レベル記録更新", Neon2)
         }
+
+        NeonButton("📺 広告を見てライフ全回復・続きから", onClick = onWatchAdToRevive)
 
         if (!isImported) {
             when {

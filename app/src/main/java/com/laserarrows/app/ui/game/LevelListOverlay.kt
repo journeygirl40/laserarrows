@@ -50,6 +50,9 @@ fun LevelListOverlay(
     clearedLevels: Set<Int>,
     levelBestLivesLost: Map<Int, Int>,
     levelBestScore: Map<Int, Int>,
+    hasActiveRun: Boolean,
+    activeLevel: Int,
+    initialExcludePerfect: Boolean = false,
     onSelectLevel: (Int) -> Unit,
     onResetRatings: () -> Unit,
     onBack: () -> Unit,
@@ -57,9 +60,12 @@ fun LevelListOverlay(
 ) {
     val maxLv = clearedLevels.maxOrNull() ?: 0
     val upperBound = maxOf(maxLv + 1, 30)
-    var excludePerfect by remember { mutableStateOf(false) }
+    var excludePerfect by remember { mutableStateOf(initialExcludePerfect) }
     var sortDescending by remember { mutableStateOf(true) }
     var confirmingReset by remember { mutableStateOf(false) }
+    // レベル一覧からの選択は必ず新規ランを開始する(newRun)ため、再開可能なランが残っていると気付かず上書きされてしまう。
+    // そのため選択前に一度だけ確認を挟み、誤タップで進行中のランを失わないようにする。
+    var confirmingLevel by remember { mutableStateOf<Int?>(null) }
     val visibleLevels = remember(upperBound, excludePerfect, sortDescending, clearedLevels, levelBestLivesLost) {
         val base = (1..upperBound).filter { lv ->
             val isPerfect = lv in clearedLevels && (levelBestLivesLost[lv] == null || levelBestLivesLost[lv] == 0)
@@ -161,7 +167,13 @@ fun LevelListOverlay(
                         bestScore = levelBestScore[lv],
                         maxScore = cumulativeMaxScore[lv] ?: 0,
                         isNext = lv == maxLv + 1,
-                        onClick = { onSelectLevel(lv) },
+                        onClick = {
+                            if (hasActiveRun) {
+                                confirmingLevel = lv
+                            } else {
+                                onSelectLevel(lv)
+                            }
+                        },
                     )
                 }
             }
@@ -183,6 +195,44 @@ fun LevelListOverlay(
                     modifier = Modifier.weight(1f),
                 )
                 GhostButton("戻る", onClick = onBack, modifier = Modifier.weight(1f))
+            }
+        }
+
+        confirmingLevel?.let { lv ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xCC0A0814)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .background(Bg3, RoundedCornerShape(20.dp))
+                        .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Lv.$lv に挑戦しますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(
+                        "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
+                        fontSize = 12.5.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GhostButton("キャンセル", onClick = { confirmingLevel = null }, modifier = Modifier.weight(1f))
+                        GhostButton(
+                            "挑戦する",
+                            onClick = {
+                                onSelectLevel(lv)
+                                confirmingLevel = null
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
     }

@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -36,17 +38,17 @@ import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
-import java.util.Locale
 
 @Composable
 fun HudBar(
     level: Int,
     score: Int,
-    comboMultiplier: Double,
+    combo: Int,
     lives: Int,
     bestScore: Int,
     crossedHighScore: Boolean,
     inLevelRecordTerritory: Boolean,
+    scoreBonusPopup: ScoreBonusPopup?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -57,15 +59,26 @@ fun HudBar(
                 valueColor = if (inLevelRecordTerritory) Neon2 else TextPrimary,
                 modifier = Modifier.weight(1f),
             )
-            HudBlock(
-                label = "SCORE",
-                value = score.toString(),
-                valueColor = if (crossedHighScore) GoldColor else TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
+            Box(modifier = Modifier.weight(1f)) {
+                HudBlock(
+                    label = "SCORE",
+                    value = score.toString(),
+                    valueColor = if (crossedHighScore) GoldColor else TextPrimary,
+                )
+                scoreBonusPopup?.let { popup ->
+                    key(popup.token) {
+                        ScoreBonusPopupView(
+                            bonus = popup.bonus,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(y = (-16).dp),
+                        )
+                    }
+                }
+            }
             HudBlock(
                 label = "COMBO",
-                value = String.format(Locale.US, "×%.1f", comboMultiplier),
+                value = "×$combo",
                 valueColor = GoldColor,
                 modifier = Modifier.weight(1f),
             )

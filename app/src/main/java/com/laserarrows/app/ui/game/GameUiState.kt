@@ -33,6 +33,9 @@ data class ToastMessage(val text: String, val isDanger: Boolean = false, val tok
 
 data class ComboPopup(val combo: Int, val token: Long = 0L)
 
+/** コンボ倍率によって上乗せされたボーナス点数を、スコアの上に一時的に表示する演出。 */
+data class ScoreBonusPopup(val bonus: Int, val token: Long = 0L)
+
 /** プレイ中にハイスコアを初めて上回った瞬間に一度だけ発火する演出。 */
 data class HighScorePopup(val score: Int, val token: Long = 0L)
 
@@ -64,21 +67,28 @@ data class GameUiState(
     val activeShot: ShotAnimation? = null,
     val toast: ToastMessage? = null,
     val comboPopup: ComboPopup? = null,
+    val scoreBonusPopup: ScoreBonusPopup? = null,
     val highScorePopup: HighScorePopup? = null,
     val levelRecordPopup: LevelRecordPopup? = null,
     val crossedHighScoreThisRun: Boolean = false,
     val crossedLevelRecordThisRun: Boolean = false,
     val bestLevel: Int = 1,
     val bestScore: Int = 0,
+    /** このラン開始時点でのハイスコア(ラン中の差分表示は、途中で更新されていく[bestScore]ではなくこちらを基準にする)。 */
+    val bestScoreAtRunStart: Int = 0,
     val bestLevelReached: Int = 1,
     val clearedLevels: Set<Int> = emptySet(),
     val levelBestLivesLost: Map<Int, Int> = emptyMap(),
     val levelBestScore: Map<Int, Int> = emptyMap(),
     val importHistory: List<ImportHistoryEntry> = emptyList(),
     val hasActiveRun: Boolean = false,
+    /** 直前のランがゲームオーバーで終わったか(trueの間はホーム画面で「続きから」を出さず、最初からのみにする)。 */
+    val lostLastRun: Boolean = false,
+    /** レベル一覧を開いた時点で「パーフェクトを除外」フィルタを最初からONにするか(ホームの未パーフェクト件数バッジから遷移した場合)。 */
+    val levelListExcludePerfect: Boolean = false,
     val isImported: Boolean = false,
+    /** 現在プレイ中の盤面が由来するお気に入り/インポート履歴エントリのID(importedAt)。クリア時にそのエントリの記録を更新するために使う。 */
+    val activeFavoriteImportedAt: Long? = null,
     val isEditorTest: Boolean = false,
     val editorState: EditorState = EditorState(),
-) {
-    val comboMultiplier: Double get() = 1.0 + combo * 0.1
-}
+)
