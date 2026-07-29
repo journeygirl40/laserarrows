@@ -53,6 +53,8 @@ fun LevelListOverlay(
     hasActiveRun: Boolean,
     activeLevel: Int,
     initialExcludePerfect: Boolean = false,
+    sortDescending: Boolean,
+    onToggleSort: () -> Unit,
     onSelectLevel: (Int) -> Unit,
     onResetRatings: () -> Unit,
     onBack: () -> Unit,
@@ -61,7 +63,6 @@ fun LevelListOverlay(
     val maxLv = clearedLevels.maxOrNull() ?: 0
     val upperBound = maxOf(maxLv + 1, 30)
     var excludePerfect by remember { mutableStateOf(initialExcludePerfect) }
-    var sortDescending by remember { mutableStateOf(true) }
     var confirmingReset by remember { mutableStateOf(false) }
     // レベル一覧からの選択は必ず新規ランを開始する(newRun)ため、再開可能なランが残っていると気付かず上書きされてしまう。
     // そのため選択前に一度だけ確認を挟み、誤タップで進行中のランを失わないようにする。
@@ -123,7 +124,7 @@ fun LevelListOverlay(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clickable { sortDescending = !sortDescending }
+                        .clickable(onClick = onToggleSort)
                         .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
                         .border(1.dp, Neon2, RoundedCornerShape(999.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),

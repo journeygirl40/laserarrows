@@ -24,17 +24,18 @@ fun NeonButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(14.dp)
     Text(
         text = text,
-        color = TextPrimary,
+        color = TextPrimary.copy(alpha = if (enabled) 1f else 0.4f),
         fontWeight = MaterialTheme.typography.titleMedium.fontWeight,
         fontSize = 15.sp,
         textAlign = TextAlign.Center,
         modifier = modifier
-            .background(Brush.linearGradient(listOf(Neon1, PurpleAccent)), shape)
-            .clickable(onClick = onClick)
+            .background(Brush.linearGradient(listOf(Neon1, PurpleAccent)).let { if (enabled) it else Brush.linearGradient(listOf(GlassFill, GlassFill)) }, shape)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 30.dp, vertical = 14.dp),
     )
 }
@@ -44,17 +45,18 @@ fun GhostButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(14.dp)
     Text(
         text = text,
-        color = TextPrimary,
+        color = TextPrimary.copy(alpha = if (enabled) 1f else 0.4f),
         fontSize = 13.sp,
         textAlign = TextAlign.Center,
         modifier = modifier
             .background(GlassFill, shape)
             .border(1.dp, GlassBorder, shape)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 11.dp),
     )
 }

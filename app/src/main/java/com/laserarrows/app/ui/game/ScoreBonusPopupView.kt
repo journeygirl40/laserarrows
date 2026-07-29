@@ -20,9 +20,9 @@ import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.theme.GoldColor
 import kotlinx.coroutines.delay
 
-/** コンボ倍率で上乗せされたボーナス点数を、スコア表示の上にふわっと出す(何点お得だったか一目でわかるように)。 */
+/** そのショットで加算されたスコアを、スコア表示の上にふわっと出す(何点入ったか一目でわかるように)。 */
 @Composable
-fun ScoreBonusPopupView(bonus: Int, modifier: Modifier = Modifier) {
+fun ScoreBonusPopupView(gained: Int, modifier: Modifier = Modifier) {
     val scale = remember { Animatable(0.4f) }
     val alpha = remember { Animatable(1f) }
 
@@ -38,7 +38,7 @@ fun ScoreBonusPopupView(bonus: Int, modifier: Modifier = Modifier) {
 
     Box(modifier = modifier) {
         Text(
-            "+$bonus ボーナス",
+            "+$gained",
             fontSize = 13.sp,
             fontWeight = FontWeight.Black,
             color = GoldColor,

@@ -2,6 +2,7 @@ package com.laserarrows.app.data
 
 import android.content.Context
 import android.util.Base64
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -19,6 +20,8 @@ data class ImportHistoryEntry(
     val level: Int? = null,
     /** この盤面をお気に入りとしてプレイした中で最も少なかった消費ライフ数(0ならパーフェクト、nullなら一度もクリアしていない)。 */
     val bestLivesLost: Int? = null,
+    /** bestLivesLostを記録した際の一手ごとの再生ログ(発射元セルの列。ReplayEngineでの復元用)。nullなら振り返り不可。 */
+    val replayLog: String? = null,
 )
 
 private val Context.progressDataStore by preferencesDataStore(name = "laserarrows_progress")
@@ -32,6 +35,7 @@ class ProgressStore(private val context: Context) {
     private val levelBestLivesLostKey = stringPreferencesKey("level_best_lives_lost")
     private val levelBestScoreKey = stringPreferencesKey("level_best_score")
     private val activeRunKey = stringPreferencesKey("active_run")
+    private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
 
     val best: Flow<BestRecord> = context.progressDataStore.data.map { prefs ->
         BestRecord(
@@ -129,6 +133,15 @@ class ProgressStore(private val context: Context) {
 
     suspend fun loadActiveRun(): String? = context.progressDataStore.data.first()[activeRunKey]
 
+    /** レベル一覧の並び順(新しい順/古い順)。アプリを再起動しても選んだ順序を保持する。 */
+    val levelListSortDescending: Flow<Boolean> = context.progressDataStore.data.map { prefs ->
+        prefs[levelListSortDescendingKey] ?: true
+    }
+
+    suspend fun saveLevelListSortDescending(descending: Boolean) {
+        context.progressDataStore.edit { prefs -> prefs[levelListSortDescendingKey] = descending }
+    }
+
     private fun encodeLevelIntMap(map: Map<Int, Int>): String =
         map.entries.joinToString(",") { (level, value) -> "$level:$value" }
 
@@ -156,8 +169,9 @@ class ProgressStore(private val context: Context) {
         }
     }
 
-    /** お気に入りの盤面をクリアした際に、そのエントリの最良記録(最少消費ライフ数)を更新する。一度良くなった評価は下がらない。 */
-    suspend fun recordFavoriteClear(importedAt: Long, livesLost: Int) {
+    /** お気に入りの盤面をクリアした際に、そのエントリの最良記録(最少消費ライフ数)を更新する。一度良くなった評価は下がらない。
+     * replayLog(一手ごとの振り返りログ)も、記録が更新された時だけ合わせて更新し、常に「最良記録の一手」を指すようにする。 */
+    suspend fun recordFavoriteClear(importedAt: Long, livesLost: Int, replayLog: String) {
         context.progressDataStore.edit { prefs ->
             val current = decodeImportHistory(prefs[importHistoryKey])
             val updated = current.map { entry ->
@@ -165,7 +179,11 @@ class ProgressStore(private val context: Context) {
                     entry
                 } else {
                     val existing = entry.bestLivesLost
-                    if (existing == null || livesLost < existing) entry.copy(bestLivesLost = livesLost) else entry
+                    if (existing == null || livesLost < existing) {
+                        entry.copy(bestLivesLost = livesLost, replayLog = replayLog)
+                    } else {
+                        entry
+                    }
                 }
             }
             prefs[importHistoryKey] = encodeImportHistory(updated)
@@ -192,14 +210,14 @@ class ProgressStore(private val context: Context) {
 
     private fun encodeImportHistory(entries: List<ImportHistoryEntry>): String = entries.joinToString("\n") { entry ->
         val memoB64 = Base64.encodeToString(entry.memo.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        "${entry.importedAt}|${entry.code}|$memoB64|${entry.level ?: ""}|${entry.bestLivesLost ?: ""}"
+        "${entry.importedAt}|${entry.code}|$memoB64|${entry.level ?: ""}|${entry.bestLivesLost ?: ""}|${entry.replayLog ?: ""}"
     }
 
     private fun decodeImportHistory(raw: String?): List<ImportHistoryEntry> {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split("\n").mapNotNull { line ->
-            // 旧形式(level/bestLivesLostフィールド無し)との互換のため、末尾のフィールドは無くても読み込めるようにする。
-            val parts = line.split("|", limit = 5)
+            // 旧形式(level/bestLivesLost/replayLogフィールド無し)との互換のため、末尾のフィールドは無くても読み込めるようにする。
+            val parts = line.split("|", limit = 6)
             if (parts.size < 3) return@mapNotNull null
             val importedAt = parts[0].toLongOrNull() ?: return@mapNotNull null
             val memo = runCatching {
@@ -207,7 +225,15 @@ class ProgressStore(private val context: Context) {
             }.getOrDefault("")
             val level = parts.getOrNull(3)?.toIntOrNull()
             val bestLivesLost = parts.getOrNull(4)?.toIntOrNull()
-            ImportHistoryEntry(code = parts[1], memo = memo, importedAt = importedAt, level = level, bestLivesLost = bestLivesLost)
+            val replayLog = parts.getOrNull(5)?.takeIf { it.isNotBlank() }
+            ImportHistoryEntry(
+                code = parts[1],
+                memo = memo,
+                importedAt = importedAt,
+                level = level,
+                bestLivesLost = bestLivesLost,
+                replayLog = replayLog,
+            )
         }
     }
 

@@ -61,6 +61,7 @@ fun FavoritesOverlay(
     onShare: (ImportHistoryEntry) -> Unit,
     onDelete: (ImportHistoryEntry) -> Unit,
     onEditMemo: (ImportHistoryEntry, String) -> Unit,
+    onOpenReplay: (ImportHistoryEntry) -> Unit,
     onAddNew: () -> Unit,
     onExportAll: () -> Unit,
     onBack: () -> Unit,
@@ -150,6 +151,7 @@ fun FavoritesOverlay(
                             onShare = { onShare(entry) },
                             onDelete = { onDelete(entry) },
                             onEditMemo = { newMemo -> onEditMemo(entry, newMemo) },
+                            onOpenReplay = { onOpenReplay(entry) },
                         )
                     }
                 }
@@ -177,6 +179,7 @@ private fun FavoriteItem(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onEditMemo: (String) -> Unit,
+    onOpenReplay: () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val dateText = remember(entry.importedAt) {
@@ -303,6 +306,15 @@ private fun FavoriteItem(
                         }
                         .padding(6.dp),
                 )
+                if (entry.replayLog != null) {
+                    Text(
+                        "📖",
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .clickable(onClick = onOpenReplay)
+                            .padding(6.dp),
+                    )
+                }
                 Text(
                     "📤",
                     fontSize = 16.sp,

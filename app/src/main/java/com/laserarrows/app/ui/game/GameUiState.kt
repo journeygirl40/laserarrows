@@ -33,8 +33,8 @@ data class ToastMessage(val text: String, val isDanger: Boolean = false, val tok
 
 data class ComboPopup(val combo: Int, val token: Long = 0L)
 
-/** コンボ倍率によって上乗せされたボーナス点数を、スコアの上に一時的に表示する演出。 */
-data class ScoreBonusPopup(val bonus: Int, val token: Long = 0L)
+/** そのアクションで加算されたスコアを、スコアの上に一時的に表示する演出。 */
+data class ScoreBonusPopup(val gained: Int, val token: Long = 0L)
 
 /** プレイ中にハイスコアを初めて上回った瞬間に一度だけ発火する演出。 */
 data class HighScorePopup(val score: Int, val token: Long = 0L)
@@ -82,10 +82,9 @@ data class GameUiState(
     val levelBestScore: Map<Int, Int> = emptyMap(),
     val importHistory: List<ImportHistoryEntry> = emptyList(),
     val hasActiveRun: Boolean = false,
-    /** 直前のランがゲームオーバーで終わったか(trueの間はホーム画面で「続きから」を出さず、最初からのみにする)。 */
-    val lostLastRun: Boolean = false,
     /** レベル一覧を開いた時点で「パーフェクトを除外」フィルタを最初からONにするか(ホームの未パーフェクト件数バッジから遷移した場合)。 */
     val levelListExcludePerfect: Boolean = false,
+    val levelListSortDescending: Boolean = true,
     val isImported: Boolean = false,
     /** 現在プレイ中の盤面が由来するお気に入り/インポート履歴エントリのID(importedAt)。クリア時にそのエントリの記録を更新するために使う。 */
     val activeFavoriteImportedAt: Long? = null,

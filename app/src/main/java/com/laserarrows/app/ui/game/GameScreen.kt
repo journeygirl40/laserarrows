@@ -86,7 +86,6 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         }
     }
 
-    val hasProgress = uiState.clearedLevels.isNotEmpty()
     val nextLevel = (uiState.clearedLevels.maxOrNull() ?: 0) + 1
     val imperfectLevelCount = uiState.clearedLevels.count { lv ->
         val best = uiState.levelBestLivesLost[lv]
@@ -106,6 +105,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             is Overlay.ColorPick, is Overlay.DirectionPick -> viewModel.cancelLightPick()
             is Overlay.Clear -> viewModel.clearHome()
             is Overlay.GameOver -> viewModel.gameOverHome()
+            is Overlay.Replay -> viewModel.closeReplay()
             Overlay.None -> viewModel.goHome()
         }
     }
@@ -116,13 +116,13 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 bestScore = uiState.bestScore,
                 bestLevelReached = uiState.bestLevelReached,
                 imperfectLevelCount = imperfectLevelCount,
-                hasProgress = hasProgress,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
                 activeLevel = uiState.level,
-                lostLastRun = uiState.lostLastRun,
-                onStart = { viewModel.goStart() },
-                onContinue = { viewModel.goContinue() },
+                activeScore = uiState.score,
+                activeLives = uiState.lives,
+                onHighScoreChallenge = { viewModel.goStart() },
+                onLevelUpChallenge = { viewModel.goContinue() },
                 onResume = { viewModel.resume() },
                 onShowList = { viewModel.goList() },
                 onShowImperfectLevels = { viewModel.goList(excludePerfect = true) },
@@ -157,6 +157,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 hasActiveRun = uiState.hasActiveRun,
                 activeLevel = uiState.level,
                 initialExcludePerfect = uiState.levelListExcludePerfect,
+                sortDescending = uiState.levelListSortDescending,
+                onToggleSort = { viewModel.setLevelListSortDescending(!uiState.levelListSortDescending) },
                 onSelectLevel = { viewModel.selectLevel(it) },
                 onResetRatings = { viewModel.resetLevelRatings() },
                 onBack = { viewModel.listBack() },
@@ -174,6 +176,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 },
                 onDelete = { viewModel.removeFavorite(it) },
                 onEditMemo = { entry, newMemo -> viewModel.updateFavoriteMemo(entry, newMemo) },
+                onOpenReplay = { viewModel.openReplay(it) },
                 onAddNew = { viewModel.goImport() },
                 onExportAll = {
                     val text = viewModel.exportFavorites()
@@ -191,6 +194,13 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             uiState.overlay == Overlay.Import -> ImportOverlay(
                 onImport = { code, memo -> viewModel.importBoard(code, memo) },
                 onCancel = { viewModel.importBack() },
+            )
+
+            uiState.overlay is Overlay.Replay -> ReplayOverlay(
+                replay = uiState.overlay as Overlay.Replay,
+                onStepBack = { viewModel.replayStep(-1) },
+                onStepForward = { viewModel.replayStep(1) },
+                onClose = { viewModel.closeReplay() },
             )
 
             else -> GameplayContent(uiState, viewModel, context)
@@ -410,6 +420,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                         onCancel = { viewModel.cancelLightPick() },
                                     )
                                     Overlay.None -> Unit
+                                    is Overlay.Replay -> Unit
                                 }
                             }
                         }

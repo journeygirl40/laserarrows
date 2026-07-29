@@ -68,7 +68,7 @@ fun HudBar(
                 scoreBonusPopup?.let { popup ->
                     key(popup.token) {
                         ScoreBonusPopupView(
-                            bonus = popup.bonus,
+                            gained = popup.gained,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .offset(y = (-16).dp),

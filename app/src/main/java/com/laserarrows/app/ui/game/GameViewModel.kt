@@ -17,6 +17,7 @@ import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.engine.LaserSimulator
 import com.laserarrows.app.engine.PuzzleGenerator
+import com.laserarrows.app.engine.ReplayEngine
 import com.laserarrows.app.engine.ScoreRules
 import com.laserarrows.app.engine.Tile
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +96,16 @@ class GameViewModel(
                 _uiState.update { it.copy(importHistory = history) }
             }
         }
+        viewModelScope.launch {
+            progressStore.levelListSortDescending.collect { descending ->
+                _uiState.update { it.copy(levelListSortDescending = descending) }
+            }
+        }
+    }
+
+    fun setLevelListSortDescending(descending: Boolean) {
+        _uiState.update { it.copy(levelListSortDescending = descending) }
+        viewModelScope.launch { progressStore.saveLevelListSortDescending(descending) }
     }
 
     private fun maxLevelReached(): Int = _uiState.value.clearedLevels.maxOrNull() ?: 0
@@ -119,15 +130,6 @@ class GameViewModel(
     fun favoritesBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
     fun goEditor() = _uiState.update { it.copy(overlay = Overlay.Editor) }
     fun editorBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
-    fun clearHome() = _uiState.update {
-        it.copy(
-            overlay = when {
-                it.isEditorTest -> Overlay.Editor
-                it.isImported -> Overlay.Favorites
-                else -> Overlay.Home
-            },
-        )
-    }
     fun gameOverHome() = _uiState.update {
         it.copy(
             overlay = when {
@@ -136,6 +138,19 @@ class GameViewModel(
                 else -> Overlay.Home
             },
         )
+    }
+
+    /** レベルクリア画面から「ホームに戻る」。次のレベルを先読み生成してアクティブランにし、スコア・ライフを引き継いだまま「再開する」で戻れるようにする。 */
+    fun clearHome() {
+        val current = _uiState.value
+        when {
+            current.isEditorTest -> _uiState.update { it.copy(overlay = Overlay.Editor) }
+            current.isImported -> _uiState.update { it.copy(overlay = Overlay.Favorites) }
+            else -> {
+                _uiState.update { it.copy(level = current.level + 1) }
+                startLevel(targetOverlay = Overlay.Home)
+            }
+        }
     }
 
     /** プレイ中にいつでもホームへ(自作パズルのテストプレイ中はエディタへ)。盤面・スコア・ライフ等はそのまま保持し、後で再開できる。 */
@@ -192,7 +207,7 @@ class GameViewModel(
         startLevel()
     }
 
-    private fun startLevel() {
+    private fun startLevel(targetOverlay: Overlay = Overlay.None) {
         viewModelScope.launch {
             val level = _uiState.value.level
             val size = PuzzleGenerator.levelSize(level)
@@ -209,7 +224,7 @@ class GameViewModel(
                     busy = false,
                     history = emptyList(),
                     levelSnapshot = LevelSnapshot(board, it.lives, it.score, it.combo),
-                    overlay = Overlay.None,
+                    overlay = targetOverlay,
                     hasActiveRun = true,
                     isImported = false,
                     isEditorTest = false,
@@ -233,14 +248,24 @@ class GameViewModel(
         return BoardCode.encode(current.levelSnapshot?.board ?: current.board)
     }
 
-    /** 今プレイしていた盤面の初期状態を、コードの貼り付けなしでそのままお気に入りに登録する。 */
+    /** 今プレイしていた盤面の初期状態を、コードの貼り付けなしでそのままお気に入りに登録する。
+     * クリア画面から登録した場合は、その時のクリア実績(消費ライフ・一手ごとの再生ログ)もあわせて記録し、
+     * お気に入り一覧からすぐ振り返れるようにする。 */
     fun addCurrentBoardToFavorites(memo: String = "") {
         val current = _uiState.value
         val board = current.levelSnapshot?.board ?: current.board
         val code = BoardCode.encode(board)
         // お気に入りボタンは実レベルのプレイ後にしか出さないため、current.levelがそのまま盤面の由来レベルになる。
         val level = current.level.takeIf { !current.isImported }
-        viewModelScope.launch { progressStore.addImportHistory(code, memo, level) }
+        val importedAt = System.currentTimeMillis()
+        val clearedOverlay = current.overlay as? Overlay.Clear
+        viewModelScope.launch {
+            progressStore.addImportHistory(code, memo, level, importedAt)
+            if (clearedOverlay != null) {
+                val replayLog = ReplayEngine.encodeSteps(current.history.map { it.removedAPos })
+                progressStore.recordFavoriteClear(importedAt, clearedOverlay.livesLost, replayLog)
+            }
+        }
         showToast("⭐ お気に入りに登録しました")
     }
 
@@ -289,6 +314,24 @@ class GameViewModel(
         }
         applyImportedBoard(board, level = entry.level, importedAt = entry.importedAt)
     }
+
+    /** お気に入りのクリア記録を、一手ごとに振り返るログ画面を開く。 */
+    fun openReplay(entry: ImportHistoryEntry) {
+        val log = entry.replayLog ?: return
+        val board = BoardCode.decode(entry.code) ?: return
+        val steps = ReplayEngine.decodeSteps(log)
+        if (steps.isEmpty()) return
+        _uiState.update { it.copy(overlay = Overlay.Replay(entry, board, steps, 0)) }
+    }
+
+    /** 振り返りログを1手分だけ進める(delta=1)/戻す(delta=-1)。 */
+    fun replayStep(delta: Int) {
+        val replay = _uiState.value.overlay as? Overlay.Replay ?: return
+        val newIndex = (replay.stepIndex + delta).coerceIn(0, replay.steps.size)
+        _uiState.update { it.copy(overlay = replay.copy(stepIndex = newIndex)) }
+    }
+
+    fun closeReplay() = _uiState.update { it.copy(overlay = Overlay.Favorites) }
 
     private fun applyImportedBoard(board: Board, level: Int?, importedAt: Long?) {
         val remaining = board.tiles.values.count { it is Tile.Receiver }
@@ -465,8 +508,6 @@ class GameViewModel(
             val newBoard = current.board.remove(shot.originKey).remove(hitKey)
             val newRemaining = current.remainingReceivers - (if (wasReceiver) 1 else 0)
             val newScore = current.score + gained
-            // コンボ倍率が無ければ得られたはずの基本点(1点)を上回った分を「ボーナス」として見せる。
-            val bonus = gained - 1
             // 自己ベストが0(初回プレイ等)の場合は「更新」演出に値しないので鳴らさない。既にこのランで一度鳴らした後は再度は鳴らさない。
             val justBeatHighScore = gained > 0 && !current.crossedHighScoreThisRun && current.bestScoreAtRunStart > 0 &&
                 current.score <= current.bestScoreAtRunStart && newScore > current.bestScoreAtRunStart
@@ -485,7 +526,7 @@ class GameViewModel(
                     busy = false,
                     activeShot = null,
                     comboPopup = if (wasReceiver && newCombo >= 2) ComboPopup(newCombo, token = System.nanoTime()) else null,
-                    scoreBonusPopup = if (wasReceiver && bonus > 0) ScoreBonusPopup(bonus, token = System.nanoTime()) else null,
+                    scoreBonusPopup = if (wasReceiver && gained > 0) ScoreBonusPopup(gained, token = System.nanoTime()) else null,
                     crossedHighScoreThisRun = it.crossedHighScoreThisRun || justBeatHighScore,
                     highScorePopup = if (justBeatHighScore) {
                         HighScorePopup(newScore, token = System.nanoTime())
@@ -657,7 +698,8 @@ class GameViewModel(
         } else {
             val favoriteImportedAt = current.activeFavoriteImportedAt
             if (favoriteImportedAt != null) {
-                viewModelScope.launch { progressStore.recordFavoriteClear(favoriteImportedAt, livesLost) }
+                val replayLog = ReplayEngine.encodeSteps(current.history.map { it.removedAPos })
+                viewModelScope.launch { progressStore.recordFavoriteClear(favoriteImportedAt, livesLost, replayLog) }
             }
         }
         _uiState.update {
@@ -678,29 +720,24 @@ class GameViewModel(
             viewModelScope.launch { progressStore.saveBest(newBest) }
             _uiState.update { it.copy(bestLevel = newBest.level, bestScore = newBest.score) }
         }
-        _uiState.update { it.copy(overlay = Overlay.GameOver(beatBest), hasActiveRun = false, lostLastRun = true) }
+        _uiState.update { it.copy(overlay = Overlay.GameOver(beatBest), hasActiveRun = false) }
     }
 
-    /** ゲームオーバー画面から、広告視聴の報酬としてライフを全回復し、この面を初期状態からやり直す。スコア・コンボは引き継ぐ(途切れさせない)。 */
+    /** ゲームオーバー画面から、広告視聴の報酬としてライフを全回復し、ゲームオーバーになった時点の盤面からそのまま続ける。 */
     fun reviveWithAd() {
         val current = _uiState.value
         if (current.overlay !is Overlay.GameOver) return
-        val snapshot = current.levelSnapshot ?: return
         _uiState.update {
             it.copy(
-                board = snapshot.board,
                 lives = GameUiState().lives,
-                remainingReceivers = snapshot.board.tiles.values.count { t -> t is Tile.Receiver },
-                history = emptyList(),
                 busy = false,
                 activeShot = null,
                 comboPopup = null,
                 overlay = Overlay.None,
                 hasActiveRun = true,
-                lostLastRun = false,
             )
         }
-        showToast("📺 広告視聴でライフ全回復!この面をもう一度挑戦できます")
+        showToast("📺 広告視聴でライフ全回復!続きから挑戦できます")
     }
 
     /** リワード広告がまだ視聴できない状態だった場合に呼ぶ。 */
