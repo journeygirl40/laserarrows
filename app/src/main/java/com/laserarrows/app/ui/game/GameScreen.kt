@@ -87,10 +87,6 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
     }
 
     val nextLevel = (uiState.clearedLevels.maxOrNull() ?: 0) + 1
-    val imperfectLevelCount = uiState.clearedLevels.count { lv ->
-        val best = uiState.levelBestLivesLost[lv]
-        best != null && best > 0
-    }
     val context = LocalContext.current
 
     // ホーム画面(overlayスタックの一番外側)以外では、Android標準の「戻る」ボタンでアプリごと終了させず、
@@ -114,8 +110,6 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         when {
             uiState.overlay == Overlay.Home -> HomeOverlay(
                 bestScore = uiState.bestScore,
-                bestLevelReached = uiState.bestLevelReached,
-                imperfectLevelCount = imperfectLevelCount,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
                 activeLevel = uiState.level,
@@ -125,7 +119,6 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 onLevelUpChallenge = { viewModel.goContinue() },
                 onResume = { viewModel.resume() },
                 onShowList = { viewModel.goList() },
-                onShowImperfectLevels = { viewModel.goList(excludePerfect = true) },
                 onShowFavorites = { viewModel.goFavorites() },
                 onShowEditor = { viewModel.goEditor() },
             )
@@ -166,6 +159,10 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
 
             uiState.overlay == Overlay.Favorites -> FavoritesOverlay(
                 history = uiState.importHistory,
+                sortKey = uiState.favoriteSortKey,
+                sortDescending = uiState.favoriteSortDescending,
+                onSetSortKey = { viewModel.setFavoriteSortKey(it) },
+                onSetSortDescending = { viewModel.setFavoriteSortDescending(it) },
                 onSelect = { viewModel.selectFavorite(it) },
                 onShare = { entry ->
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {

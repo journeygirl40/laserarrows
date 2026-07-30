@@ -1,12 +1,19 @@
 package com.laserarrows.app.ui.game
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +22,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,8 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,7 +50,6 @@ import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.Bg3
-import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon1
@@ -49,8 +63,6 @@ private enum class ChallengeMode { HIGH_SCORE, LEVEL_UP }
 @Composable
 fun HomeOverlay(
     bestScore: Int,
-    bestLevelReached: Int,
-    imperfectLevelCount: Int,
     nextLevel: Int,
     hasActiveRun: Boolean,
     activeLevel: Int,
@@ -60,7 +72,6 @@ fun HomeOverlay(
     onLevelUpChallenge: () -> Unit,
     onResume: () -> Unit,
     onShowList: () -> Unit,
-    onShowImperfectLevels: () -> Unit,
     onShowFavorites: () -> Unit,
     onShowEditor: () -> Unit,
     modifier: Modifier = Modifier,
@@ -79,6 +90,20 @@ fun HomeOverlay(
         if (hasActiveRun) confirmingMode = mode else startMode(mode)
     }
 
+    val bgTransition = rememberInfiniteTransition(label = "homeBg")
+    val topGlowAlpha by bgTransition.animateFloat(
+        initialValue = 0.22f,
+        targetValue = 0.36f,
+        animationSpec = infiniteRepeatable(animation = tween(2600, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "topGlowAlpha",
+    )
+    val bottomGlowAlpha by bgTransition.animateFloat(
+        initialValue = 0.14f,
+        targetValue = 0.24f,
+        animationSpec = infiniteRepeatable(animation = tween(3200, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "bottomGlowAlpha",
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -88,9 +113,19 @@ fun HomeOverlay(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 24.dp)
-                .size(280.dp)
+                .size(300.dp)
                 .background(
-                    Brush.radialGradient(listOf(Neon1.copy(alpha = 0.30f), Color.Transparent)),
+                    Brush.radialGradient(listOf(Neon1.copy(alpha = topGlowAlpha), Color.Transparent)),
+                    CircleShape,
+                ),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 60.dp, end = 4.dp)
+                .size(240.dp)
+                .background(
+                    Brush.radialGradient(listOf(PurpleAccent.copy(alpha = bottomGlowAlpha), Color.Transparent)),
                     CircleShape,
                 ),
         )
@@ -107,73 +142,33 @@ fun HomeOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .background(Brush.linearGradient(listOf(Neon1, PurpleAccent)), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("⚡", fontSize = 30.sp)
-                }
-                Spacer(modifier = Modifier.height(14.dp))
+                TitleLogo()
+                Spacer(modifier = Modifier.height(18.dp))
                 Text(
                     "レーザー・リンク",
-                    fontSize = 32.sp,
+                    fontSize = 34.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary,
+                    style = LocalTextStyle.current.copy(
+                        shadow = Shadow(color = Neon1.copy(alpha = 0.75f), blurRadius = 28f),
+                    ),
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .width(96.dp)
+                        .height(3.dp)
+                        .background(
+                            Brush.horizontalGradient(listOf(Color.Transparent, Neon2, PurpleAccent, Color.Transparent)),
+                            RoundedCornerShape(999.dp),
+                        ),
+                )
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     "色を読んで、光をつなげ。",
                     fontSize = 13.sp,
                     color = TextMuted,
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(GoldColor.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
-                            .border(1.dp, GoldColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 16.dp, vertical = 9.dp),
-                    ) {
-                        Text(
-                            "🏆 ハイスコア ${bestScore}点",
-                            fontSize = 12.sp,
-                            color = GoldColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .background(Neon2.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
-                            .border(1.dp, Neon2.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 16.dp, vertical = 9.dp),
-                    ) {
-                        Text(
-                            "🚀 到達 Lv.$bestLevelReached",
-                            fontSize = 12.sp,
-                            color = Neon2,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .background(DangerColor.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
-                            .border(1.dp, DangerColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                            .clickable(onClick = onShowImperfectLevels)
-                            .padding(horizontal = 16.dp, vertical = 9.dp),
-                    ) {
-                        Text(
-                            "❗ 未パーフェクト ${imperfectLevelCount}件",
-                            fontSize = 12.sp,
-                            color = DangerColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -266,6 +261,64 @@ fun HomeOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+/** タイトルロゴ: 回転する軌道リング+軌道パーティクル+パルスするコアで、ゲームのレーザー演出を静かに予感させる。 */
+@Composable
+private fun TitleLogo() {
+    val transition = rememberInfiniteTransition(label = "logo")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(10000, easing = LinearEasing)),
+        label = "logoRotation",
+    )
+    val corePulse by transition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(animation = tween(1500, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "logoCorePulse",
+    )
+    val glowAlpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(animation = tween(1500, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "logoGlowAlpha",
+    )
+
+    Box(modifier = Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(104.dp)
+                .background(Brush.radialGradient(listOf(Neon1.copy(alpha = glowAlpha * 0.5f), Color.Transparent))),
+        )
+        Canvas(
+            modifier = Modifier
+                .size(92.dp)
+                .rotate(rotation),
+        ) {
+            drawArc(
+                brush = Brush.sweepGradient(listOf(Neon2, PurpleAccent, Neon1, Neon2)),
+                startAngle = -40f,
+                sweepAngle = 260f,
+                useCenter = false,
+                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round),
+            )
+            val radius = size.minDimension / 2f
+            val center = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(color = Color.White, radius = 3.dp.toPx(), center = Offset(center.x, center.y - radius))
+            drawCircle(color = Neon2, radius = 2.2.dp.toPx(), center = Offset(center.x + radius * 0.87f, center.y + radius * 0.5f))
+        }
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .scale(corePulse)
+                .background(Brush.linearGradient(listOf(Neon1, PurpleAccent)), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("⚡", fontSize = 30.sp)
         }
     }
 }

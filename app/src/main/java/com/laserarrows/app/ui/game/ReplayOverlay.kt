@@ -73,6 +73,7 @@ fun ReplayOverlay(
                 InfoChip("手 ${replay.stepIndex}/$totalSteps", Neon2)
                 InfoChip("スコア ${frame.score}", GoldColor)
                 if (frame.combo >= 2) InfoChip("コンボ ×${frame.combo}", GoldColor)
+                if (frame.lightAddedAt != null) InfoChip("💡 光を設置", GoldColor)
             }
 
             Box(

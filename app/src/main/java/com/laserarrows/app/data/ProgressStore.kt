@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.map
 
 data class BestRecord(val level: Int = 1, val score: Int = 0)
 
+enum class FavoriteSortKey { DATE, LEVEL, LIVES_LOST }
+
 data class ImportHistoryEntry(
     val code: String,
     val memo: String,
@@ -36,6 +38,8 @@ class ProgressStore(private val context: Context) {
     private val levelBestScoreKey = stringPreferencesKey("level_best_score")
     private val activeRunKey = stringPreferencesKey("active_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
+    private val favoriteSortKeyKey = stringPreferencesKey("favorite_sort_key")
+    private val favoriteSortDescendingKey = booleanPreferencesKey("favorite_sort_descending")
 
     val best: Flow<BestRecord> = context.progressDataStore.data.map { prefs ->
         BestRecord(
@@ -142,6 +146,22 @@ class ProgressStore(private val context: Context) {
         context.progressDataStore.edit { prefs -> prefs[levelListSortDescendingKey] = descending }
     }
 
+    /** お気に入り一覧の並び順(日付/レベル/消費ハート数)と向き。アプリを再起動しても選んだ設定を保持する。 */
+    val favoriteSortKey: Flow<FavoriteSortKey> = context.progressDataStore.data.map { prefs ->
+        prefs[favoriteSortKeyKey]?.let { raw -> runCatching { FavoriteSortKey.valueOf(raw) }.getOrNull() } ?: FavoriteSortKey.DATE
+    }
+
+    val favoriteSortDescending: Flow<Boolean> = context.progressDataStore.data.map { prefs ->
+        prefs[favoriteSortDescendingKey] ?: true
+    }
+
+    suspend fun saveFavoriteSort(key: FavoriteSortKey, descending: Boolean) {
+        context.progressDataStore.edit { prefs ->
+            prefs[favoriteSortKeyKey] = key.name
+            prefs[favoriteSortDescendingKey] = descending
+        }
+    }
+
     private fun encodeLevelIntMap(map: Map<Int, Int>): String =
         map.entries.joinToString(",") { (level, value) -> "$level:$value" }
 
@@ -170,7 +190,9 @@ class ProgressStore(private val context: Context) {
     }
 
     /** お気に入りの盤面をクリアした際に、そのエントリの最良記録(最少消費ライフ数)を更新する。一度良くなった評価は下がらない。
-     * replayLog(一手ごとの振り返りログ)も、記録が更新された時だけ合わせて更新し、常に「最良記録の一手」を指すようにする。 */
+     * replayLog(一手ごとの振り返りログ)も、記録が更新された時に合わせて更新する。既存の最良記録に単に並んだだけ(改善はしていない)
+     * 場合でも、まだログが無いエントリならその一手を代わりに記録する(過去にログ無しで記録された最良記録が、以後ずっとログを
+     * 持てなくなるのを防ぐため)。 */
     suspend fun recordFavoriteClear(importedAt: Long, livesLost: Int, replayLog: String) {
         context.progressDataStore.edit { prefs ->
             val current = decodeImportHistory(prefs[importHistoryKey])
@@ -179,10 +201,10 @@ class ProgressStore(private val context: Context) {
                     entry
                 } else {
                     val existing = entry.bestLivesLost
-                    if (existing == null || livesLost < existing) {
-                        entry.copy(bestLivesLost = livesLost, replayLog = replayLog)
-                    } else {
-                        entry
+                    when {
+                        existing == null || livesLost < existing -> entry.copy(bestLivesLost = livesLost, replayLog = replayLog)
+                        livesLost == existing && entry.replayLog == null -> entry.copy(replayLog = replayLog)
+                        else -> entry
                     }
                 }
             }

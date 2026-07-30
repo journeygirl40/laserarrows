@@ -103,6 +103,14 @@ private fun ArrowTile(
         }
     }
 
+    val fireFlash = remember { Animatable(0f) }
+    LaunchedEffect(firing) {
+        if (firing) {
+            fireFlash.snapTo(1f)
+            fireFlash.animateTo(0f, tween(420, easing = FastOutSlowInEasing))
+        }
+    }
+
     val shape = RoundedCornerShape(10.dp)
     var boxModifier = Modifier
         .size(sizeDp)
@@ -126,6 +134,12 @@ private fun ArrowTile(
     Box(modifier = boxModifier, contentAlignment = Alignment.Center) {
         when (tile) {
             is Tile.Shooter -> {
+                ShooterGlow(
+                    color = tile.color.toComposeColor(),
+                    flash = fireFlash.value,
+                    active = !firing,
+                    sizeDp = sizeDp,
+                )
                 Text(
                     text = arrowGlyph(tile.dir),
                     color = if (firing) TextMuted else tile.color.toComposeColor(),
@@ -142,6 +156,30 @@ private fun ArrowTile(
 }
 
 @Composable
+private fun ShooterGlow(color: Color, flash: Float, active: Boolean, sizeDp: Dp) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shooterBreath")
+    val breath by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shooterBreathAlpha",
+    )
+    val baseAlpha = if (active) breath else 0.22f
+    val glowAlpha = (baseAlpha * 0.4f + flash * 0.55f).coerceIn(0f, 1f)
+    val glowScale = 1f + flash * 0.35f
+    Box(
+        modifier = Modifier
+            .size(sizeDp * 0.68f)
+            .scale(glowScale)
+            .clip(CircleShape)
+            .background(Brush.radialGradient(listOf(color.copy(alpha = glowAlpha), color.copy(alpha = 0f)))),
+    )
+}
+
+@Composable
 private fun ReceiverOrb(color: Color, sizeDp: Dp) {
     val infiniteTransition = rememberInfiniteTransition(label = "orbPulse")
     val scale by infiniteTransition.animateFloat(
@@ -153,13 +191,39 @@ private fun ReceiverOrb(color: Color, sizeDp: Dp) {
         ),
         label = "orbScale",
     )
-    Box(
-        modifier = Modifier
-            .size(sizeDp * 0.52f)
-            .scale(scale)
-            .clip(CircleShape)
-            .background(Brush.radialGradient(listOf(Color.White, color))),
+    val haloAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.22f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "orbHalo",
     )
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(sizeDp)) {
+        Box(
+            modifier = Modifier
+                .size(sizeDp * 0.9f)
+                .scale(scale)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(color.copy(alpha = haloAlpha), color.copy(alpha = 0f)))),
+        )
+        Box(
+            modifier = Modifier
+                .size(sizeDp * 0.52f)
+                .scale(scale)
+                .clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color.White, color))),
+        )
+        Box(
+            modifier = Modifier
+                .size(sizeDp * 0.14f)
+                .scale(scale)
+                .offset(x = -(sizeDp * 0.12f), y = -(sizeDp * 0.12f))
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.85f)),
+        )
+    }
 }
 
 /** 盤面のミニプレビュー(お気に入り一覧などのカードで使う、極小サイズの縮小表示)。 */

@@ -19,8 +19,8 @@ android {
         applicationId = "com.journeygirl.laserarrows"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "7.0"
+        versionCode = 8
+        versionName = "7.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

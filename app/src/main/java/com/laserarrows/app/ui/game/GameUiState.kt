@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.data.FavoriteSortKey
 import com.laserarrows.app.data.ImportHistoryEntry
 import com.laserarrows.app.engine.Board
 import com.laserarrows.app.engine.CellPos
@@ -8,15 +9,25 @@ import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.engine.LaserResult
 import com.laserarrows.app.engine.Tile
 
-data class HistoryEntry(
-    val removedAPos: CellPos,
-    val removedATile: Tile,
-    val removedBPos: CellPos,
-    val removedBTile: Tile,
-    val gained: Int,
-    val wasReceiver: Boolean,
-    val previousCombo: Int,
-)
+sealed class HistoryEntry {
+    /** 発射して2つのタイルが消えた一手(命中/衝突どちらも含む)。 */
+    data class Shot(
+        val removedAPos: CellPos,
+        val removedATile: Tile,
+        val removedBPos: CellPos,
+        val removedBTile: Tile,
+        val gained: Int,
+        val wasReceiver: Boolean,
+        val previousCombo: Int,
+    ) : HistoryEntry()
+
+    /** ライフを消費して新しい光源(矢印)を盤面に設置した一手。 */
+    data class LightAdded(
+        val cell: CellPos,
+        val tile: Tile.Shooter,
+        val previousCombo: Int,
+    ) : HistoryEntry()
+}
 
 data class LevelSnapshot(val board: Board, val lives: Int, val score: Int, val combo: Int = 0)
 
@@ -85,6 +96,8 @@ data class GameUiState(
     /** レベル一覧を開いた時点で「パーフェクトを除外」フィルタを最初からONにするか(ホームの未パーフェクト件数バッジから遷移した場合)。 */
     val levelListExcludePerfect: Boolean = false,
     val levelListSortDescending: Boolean = true,
+    val favoriteSortKey: FavoriteSortKey = FavoriteSortKey.DATE,
+    val favoriteSortDescending: Boolean = true,
     val isImported: Boolean = false,
     /** 現在プレイ中の盤面が由来するお気に入り/インポート履歴エントリのID(importedAt)。クリア時にそのエントリの記録を更新するために使う。 */
     val activeFavoriteImportedAt: Long? = null,

@@ -4,25 +4,43 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 曲がるレーザービームのシルエット -->
+    <!-- ジグザグに2回反射するレーザービームのシルエット -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="14"
+        android:strokeWidth="11"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M32,78 L32,54 L76,54 L76,32" />
+        android:strokeLineJoin="miter"
+        android:pathData="M20,88 L20,60 L54,60 L54,36 L84,36" />
     <!-- 発射元:矢印(Shooter) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M32,66 L42,82 L22,82 Z" />
-    <!-- 着弾先:光る球(Receiver) -->
+        android:pathData="M20,72 L26,60 L20,60 L14,60 Z" />
+    <!-- 1回目の反射点:矢印 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M76,32 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
-    <!-- 着弾の瞬間のきらめき -->
+        android:pathData="M54,48 L60,36 L54,36 L48,36 Z" />
+    <!-- 受光先:外側の光暈 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.25"
+        android:pathData="M84,36 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0" />
+    <!-- 受光先:中間の光暈 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M84,36 m-13,0 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0" />
+    <!-- 受光先:発光コア -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M84,36 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <!-- 着弾の瞬間の四芒星フレア -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.85"
+        android:pathData="M84,18 L86.5,33.5 L100,36 L86.5,38.5 L84,54 L81.5,38.5 L68,36 L81.5,33.5 Z" />
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
+        android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:pathData="M85,23 L91,17 M85,41 L91,47 M67,23 L61,17 M67,41 L61,47" />
+        android:pathData="M97,21 L101,17 M97,51 L101,55" />
 </vector>

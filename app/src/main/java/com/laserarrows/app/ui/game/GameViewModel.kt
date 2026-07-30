@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.laserarrows.app.LaserArrowsApplication
 import com.laserarrows.app.audio.SfxEngine
 import com.laserarrows.app.data.BestRecord
+import com.laserarrows.app.data.FavoriteSortKey
 import com.laserarrows.app.data.ImportHistoryEntry
 import com.laserarrows.app.data.ProgressStore
 import com.laserarrows.app.engine.Board
@@ -101,6 +102,26 @@ class GameViewModel(
                 _uiState.update { it.copy(levelListSortDescending = descending) }
             }
         }
+        viewModelScope.launch {
+            progressStore.favoriteSortKey.collect { key ->
+                _uiState.update { it.copy(favoriteSortKey = key) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.favoriteSortDescending.collect { descending ->
+                _uiState.update { it.copy(favoriteSortDescending = descending) }
+            }
+        }
+    }
+
+    fun setFavoriteSortKey(key: FavoriteSortKey) {
+        _uiState.update { it.copy(favoriteSortKey = key) }
+        viewModelScope.launch { progressStore.saveFavoriteSort(key, _uiState.value.favoriteSortDescending) }
+    }
+
+    fun setFavoriteSortDescending(descending: Boolean) {
+        _uiState.update { it.copy(favoriteSortDescending = descending) }
+        viewModelScope.launch { progressStore.saveFavoriteSort(_uiState.value.favoriteSortKey, descending) }
     }
 
     fun setLevelListSortDescending(descending: Boolean) {
@@ -262,8 +283,7 @@ class GameViewModel(
         viewModelScope.launch {
             progressStore.addImportHistory(code, memo, level, importedAt)
             if (clearedOverlay != null) {
-                val replayLog = ReplayEngine.encodeSteps(current.history.map { it.removedAPos })
-                progressStore.recordFavoriteClear(importedAt, clearedOverlay.livesLost, replayLog)
+                progressStore.recordFavoriteClear(importedAt, clearedOverlay.livesLost, encodeReplayLog(current.history))
             }
         }
         showToast("⭐ お気に入りに登録しました")
@@ -461,6 +481,17 @@ class GameViewModel(
         }
     }
 
+    /** Undo履歴を、お気に入りの一手ごとの振り返り再生用にエンコードする(発射/光源設置の両方を含む)。 */
+    private fun encodeReplayLog(history: List<HistoryEntry>): String {
+        val steps = history.map { entry ->
+            when (entry) {
+                is HistoryEntry.Shot -> ReplayEngine.Step.Fire(entry.removedAPos)
+                is HistoryEntry.LightAdded -> ReplayEngine.Step.AddLight(entry.cell, entry.tile.color, entry.tile.dir)
+            }
+        }
+        return ReplayEngine.encodeSteps(steps)
+    }
+
     private fun findBends(path: List<CellPos>): Set<CellPos> {
         if (path.size < 3) return emptySet()
         val bends = mutableSetOf<CellPos>()
@@ -496,7 +527,7 @@ class GameViewModel(
             // 矢印(Shooter)同士が同色でぶつかった場合は、見た目上はタイルが消えても「狙った接続」ではないため失敗扱いにする(コンボは繋げない・得点も与えない)。
             val newCombo = if (wasReceiver) current.combo + 1 else 0
             val gained = if (wasReceiver) ScoreRules.shotScore(newCombo) else 0
-            val entry = HistoryEntry(
+            val entry = HistoryEntry.Shot(
                 removedAPos = shot.originKey,
                 removedATile = originTile,
                 removedBPos = hitKey,
@@ -513,6 +544,9 @@ class GameViewModel(
                 current.score <= current.bestScoreAtRunStart && newScore > current.bestScoreAtRunStart
             if (wasReceiver) {
                 sfxEngine.playConnect(newCombo)
+                if (justBeatHighScore) {
+                    sfxEngine.playHighScore()
+                }
             } else {
                 sfxEngine.playShooterClash()
             }
@@ -564,23 +598,39 @@ class GameViewModel(
     fun undo() {
         val current = _uiState.value
         if (current.busy || current.history.isEmpty() || current.lives <= 0) return
-        val last = current.history.last()
-        val newBoard = current.board
-            .place(last.removedAPos, last.removedATile)
-            .place(last.removedBPos, last.removedBTile)
         val newLives = current.lives - 1
-        _uiState.update {
-            it.copy(
-                board = newBoard,
-                score = it.score - last.gained,
-                combo = last.previousCombo,
-                lives = newLives,
-                remainingReceivers = it.remainingReceivers + (if (last.wasReceiver) 1 else 0),
-                history = it.history.dropLast(1),
-                comboPopup = null,
-            )
+        when (val last = current.history.last()) {
+            is HistoryEntry.Shot -> {
+                val newBoard = current.board
+                    .place(last.removedAPos, last.removedATile)
+                    .place(last.removedBPos, last.removedBTile)
+                _uiState.update {
+                    it.copy(
+                        board = newBoard,
+                        score = it.score - last.gained,
+                        combo = last.previousCombo,
+                        lives = newLives,
+                        remainingReceivers = it.remainingReceivers + (if (last.wasReceiver) 1 else 0),
+                        history = it.history.dropLast(1),
+                        comboPopup = null,
+                    )
+                }
+                showToast("↺ 直前の一手を戻しました(💔1)", isDanger = true)
+            }
+            is HistoryEntry.LightAdded -> {
+                val newBoard = current.board.remove(last.cell)
+                _uiState.update {
+                    it.copy(
+                        board = newBoard,
+                        combo = last.previousCombo,
+                        lives = newLives,
+                        history = it.history.dropLast(1),
+                        comboPopup = null,
+                    )
+                }
+                showToast("↺ 設置した光源を取り消しました(💔1)", isDanger = true)
+            }
         }
-        showToast("↺ 直前の一手を戻しました(💔1)", isDanger = true)
         if (newLives <= 0) {
             viewModelScope.launch {
                 delay(700)
@@ -638,7 +688,8 @@ class GameViewModel(
     fun confirmLightDirection(dir: Direction) {
         val current = _uiState.value
         val pick = current.overlay as? Overlay.DirectionPick ?: return
-        val finalBoard = current.board.place(pick.cell, Tile.Shooter(dir, pick.color))
+        val newTile = Tile.Shooter(dir, pick.color)
+        val finalBoard = current.board.place(pick.cell, newTile)
         val result = LaserSimulator.fireLaser(finalBoard, pick.cell)
         val foundConnection = result.hit != null
         sfxEngine.playLightPlaced()
@@ -651,6 +702,7 @@ class GameViewModel(
                 pendingLightCell = null,
                 overlay = Overlay.None,
                 comboPopup = null,
+                history = it.history + HistoryEntry.LightAdded(pick.cell, newTile, it.combo),
             )
         }
         showToast(
@@ -698,7 +750,7 @@ class GameViewModel(
         } else {
             val favoriteImportedAt = current.activeFavoriteImportedAt
             if (favoriteImportedAt != null) {
-                val replayLog = ReplayEngine.encodeSteps(current.history.map { it.removedAPos })
+                val replayLog = encodeReplayLog(current.history)
                 viewModelScope.launch { progressStore.recordFavoriteClear(favoriteImportedAt, livesLost, replayLog) }
             }
         }
@@ -745,7 +797,9 @@ class GameViewModel(
         showToast("広告の準備ができていません。少し待ってからもう一度お試しください", isDanger = true)
     }
 
-    /** 進行中のラン(自作パズルのテストプレイを除く)を復元可能な形へシリアライズする。runが無ければnull。 */
+    /** 進行中のラン(自作パズルのテストプレイを除く)を復元可能な形へシリアライズする。runが無ければnull。
+     * historyも含めることで、アプリがプロセス再起動を挟んで「再開する」で復帰した後にクリア→お気に入り登録しても、
+     * 再生ログ(replayLog)が復帰前の手を欠いた不完全なものにならないようにする。 */
     private fun serializeActiveRun(state: GameUiState): String? {
         if (!state.hasActiveRun || state.isEditorTest || state.lives <= 0) return null
         val snapshot = state.levelSnapshot ?: return null
@@ -764,12 +818,13 @@ class GameViewModel(
             state.crossedLevelRecordThisRun,
             state.bestScoreAtRunStart,
             state.activeFavoriteImportedAt ?: "",
+            encodeHistory(state.history),
         ).joinToString("|")
     }
 
     private fun deserializeActiveRun(raw: String): GameUiState? {
         val parts = raw.split("|")
-        if (parts.size != 14) return null
+        if (parts.size < 14) return null
         val level = parts[0].toIntOrNull() ?: return null
         val score = parts[1].toIntOrNull() ?: return null
         val combo = parts[2].toIntOrNull() ?: return null
@@ -784,6 +839,8 @@ class GameViewModel(
         val crossedLevelRecordThisRun = parts[11] == "true"
         val bestScoreAtRunStart = parts[12].toIntOrNull() ?: return null
         val activeFavoriteImportedAt = parts[13].toLongOrNull()
+        // 旧形式(historyフィールド無し)との互換のため、14番目のフィールドが無ければ空のhistoryとして扱う。
+        val history = parts.getOrNull(14)?.let { decodeHistory(it) } ?: emptyList()
         return GameUiState(
             overlay = Overlay.Home,
             level = level,
@@ -792,6 +849,7 @@ class GameViewModel(
             lives = lives,
             board = board,
             remainingReceivers = board.tiles.values.count { it is Tile.Receiver },
+            history = history,
             levelSnapshot = LevelSnapshot(snapshotBoard, snapshotLives, snapshotScore, snapshotCombo),
             hasActiveRun = true,
             isImported = isImported,
@@ -800,6 +858,78 @@ class GameViewModel(
             bestScoreAtRunStart = bestScoreAtRunStart,
             activeFavoriteImportedAt = activeFavoriteImportedAt,
         )
+    }
+
+    private fun encodeTile(tile: Tile): String = when (tile) {
+        is Tile.Shooter -> "SH:${tile.dir.name}:${tile.color.name}"
+        is Tile.Receiver -> "RC:${tile.color.name}"
+    }
+
+    private fun decodeTile(raw: String): Tile? {
+        val parts = raw.split(":")
+        return when (parts.getOrNull(0)) {
+            "SH" -> {
+                if (parts.size != 3) return null
+                val dir = runCatching { Direction.valueOf(parts[1]) }.getOrNull() ?: return null
+                val color = runCatching { LaserColor.valueOf(parts[2]) }.getOrNull() ?: return null
+                Tile.Shooter(dir, color)
+            }
+            "RC" -> {
+                if (parts.size != 2) return null
+                val color = runCatching { LaserColor.valueOf(parts[1]) }.getOrNull() ?: return null
+                Tile.Receiver(color)
+            }
+            else -> null
+        }
+    }
+
+    /** Undo/再生ログ用の一手履歴を、アクティブラン保存用にシリアライズする。 */
+    private fun encodeHistory(history: List<HistoryEntry>): String = history.joinToString(";") { entry ->
+        when (entry) {
+            is HistoryEntry.Shot -> listOf(
+                "S",
+                entry.removedAPos.row, entry.removedAPos.col, encodeTile(entry.removedATile),
+                entry.removedBPos.row, entry.removedBPos.col, encodeTile(entry.removedBTile),
+                entry.gained, if (entry.wasReceiver) 1 else 0, entry.previousCombo,
+            ).joinToString(",")
+            is HistoryEntry.LightAdded -> listOf(
+                "L",
+                entry.cell.row, entry.cell.col, encodeTile(entry.tile), entry.previousCombo,
+            ).joinToString(",")
+        }
+    }
+
+    private fun decodeHistory(raw: String): List<HistoryEntry> {
+        if (raw.isBlank()) return emptyList()
+        return raw.split(";").mapNotNull { segment -> decodeHistoryEntry(segment) }
+    }
+
+    private fun decodeHistoryEntry(segment: String): HistoryEntry? {
+        val f = segment.split(",")
+        return when (f.getOrNull(0)) {
+            "S" -> {
+                if (f.size != 10) return null
+                val aRow = f[1].toIntOrNull() ?: return null
+                val aCol = f[2].toIntOrNull() ?: return null
+                val aTile = decodeTile(f[3]) ?: return null
+                val bRow = f[4].toIntOrNull() ?: return null
+                val bCol = f[5].toIntOrNull() ?: return null
+                val bTile = decodeTile(f[6]) ?: return null
+                val gained = f[7].toIntOrNull() ?: return null
+                val wasReceiver = f[8] == "1"
+                val previousCombo = f[9].toIntOrNull() ?: return null
+                HistoryEntry.Shot(CellPos(aRow, aCol), aTile, CellPos(bRow, bCol), bTile, gained, wasReceiver, previousCombo)
+            }
+            "L" -> {
+                if (f.size != 5) return null
+                val row = f[1].toIntOrNull() ?: return null
+                val col = f[2].toIntOrNull() ?: return null
+                val tile = decodeTile(f[3]) as? Tile.Shooter ?: return null
+                val previousCombo = f[4].toIntOrNull() ?: return null
+                HistoryEntry.LightAdded(CellPos(row, col), tile, previousCombo)
+            }
+            else -> null
+        }
     }
 
     private fun showToast(text: String, isDanger: Boolean = false) {

@@ -5,49 +5,92 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 曲がるレーザービーム(白コア) -->
+    <!-- ジグザグに2回反射するレーザービーム(白コア) -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="9"
+        android:strokeWidth="3.5"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M32,78 L32,54 L76,54 L76,32" />
-    <!-- レーザービーム(発射時のオレンジ→紫→着弾のシアンへ色が変わっていく、太く半透明) -->
+        android:strokeLineJoin="miter"
+        android:pathData="M20,88 L20,60 L54,60 L54,36 L84,36" />
+    <!-- レーザービーム(発射のオレンジ→中間の紫→着弾のシアンへ色が変わる、太く半透明) -->
     <path
-        android:strokeWidth="16"
+        android:strokeWidth="10"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillAlpha="0.88"
-        android:pathData="M32,78 L32,54 L76,54 L76,32">
+        android:strokeLineJoin="miter"
+        android:fillAlpha="0.92"
+        android:pathData="M20,88 L20,60 L54,60 L54,36 L84,36">
         <aapt:attr name="android:strokeColor">
             <gradient
                 android:type="linear"
-                android:startX="32"
-                android:startY="78"
-                android:endX="76"
-                android:endY="32"
+                android:startX="20"
+                android:startY="88"
+                android:endX="84"
+                android:endY="36"
                 android:startColor="#FF9500"
-                android:centerColor="#7C5CFF"
+                android:centerColor="#B96CFF"
                 android:endColor="#4DD9FF" />
         </aapt:attr>
     </path>
     <!-- 発射元:矢印(Shooter) -->
     <path
         android:fillColor="#FF9500"
-        android:pathData="M32,66 L42,82 L22,82 Z" />
-    <!-- 着弾先:光る球(Receiver)の外側のぼんやりした光暈 -->
+        android:pathData="M20,72 L26,60 L20,60 L14,60 Z" />
+    <!-- 1回目の反射点:矢印(紫) -->
     <path
-        android:fillColor="#4DD9FF"
-        android:fillAlpha="0.30"
-        android:pathData="M76,32 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0" />
-    <!-- 着弾先:光る球(Receiver)本体 -->
+        android:fillColor="#B96CFF"
+        android:pathData="M54,48 L60,36 L54,36 L48,36 Z" />
+
+    <!-- 受光先:外側の大きく柔らかいグロー -->
+    <path android:pathData="M84,36 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="84"
+                android:centerY="36"
+                android:gradientRadius="22"
+                android:startColor="#5A4DD9FF"
+                android:endColor="#004DD9FF" />
+        </aapt:attr>
+    </path>
+    <!-- 受光先:中間の強い光暈 -->
+    <path android:pathData="M84,36 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="84"
+                android:centerY="36"
+                android:gradientRadius="14"
+                android:startColor="#E6FFFFFF"
+                android:endColor="#4DD9FF" />
+        </aapt:attr>
+    </path>
+    <!-- 受光先:発光コア本体 -->
+    <path android:pathData="M84,36 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="84"
+                android:centerY="36"
+                android:gradientRadius="7"
+                android:startColor="#FFFFFFFF"
+                android:endColor="#4DD9FF" />
+        </aapt:attr>
+    </path>
+    <!-- 受光先:艶のハイライト -->
     <path
-        android:fillColor="#4DD9FF"
-        android:pathData="M76,32 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
-    <!-- 着弾の瞬間のきらめき -->
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9"
+        android:pathData="M81,33 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+
+    <!-- 着弾の瞬間の四芒星フレア -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.85"
+        android:pathData="M84,18 L86.5,33.5 L100,36 L86.5,38.5 L84,54 L81.5,38.5 L68,36 L81.5,33.5 Z" />
+    <!-- 追加のきらめき粒 -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
+        android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:pathData="M85,23 L91,17 M85,41 L91,47 M67,23 L61,17 M67,41 L61,47" />
+        android:pathData="M97,21 L101,17 M97,51 L101,55" />
 </vector>
