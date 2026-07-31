@@ -15,11 +15,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +51,19 @@ fun ReplayOverlay(
         ReplayEngine.frameAt(replay.initialBoard, replay.steps, replay.stepIndex)
     }
     val totalSteps = replay.steps.size
+
+    // 直前の手が発射なら、命中前(発射元・着弾先のタイルがまだ残っている)盤面から始めてビームを流し、
+    // 着弾演出が終わったところで実際の盤面(タイルが消えた状態)に切り替える。今プレイ中と同じ見え方にするため。
+    val isFireStep = replay.stepIndex > 0 &&
+        replay.steps[replay.stepIndex - 1] is ReplayEngine.Step.Fire &&
+        frame.shotResult != null
+    val preShotBoard = remember(replay.initialBoard, replay.steps, replay.stepIndex) {
+        if (isFireStep) ReplayEngine.frameAt(replay.initialBoard, replay.steps, replay.stepIndex - 1).board else null
+    }
+    var displayBoard by remember(replay.stepIndex) {
+        mutableStateOf(if (isFireStep && preShotBoard != null) preShotBoard else frame.board)
+    }
+    var showBeam by remember(replay.stepIndex) { mutableStateOf(isFireStep) }
 
     Box(
         modifier = modifier
@@ -95,6 +112,8 @@ fun ReplayOverlay(
                         val boardHeightDp = cellSizeDp * board.rows + gapDp * (board.rows - 1)
                         val panelWidthDp = boardWidthDp + marginDp * 2
                         val panelHeightDp = boardHeightDp + marginDp * 2
+                        val cellSizePx = with(LocalDensity.current) { cellSizeDp.toPx() }
+                        val gapPx = with(LocalDensity.current) { gapDp.toPx() }
 
                         Box(
                             modifier = Modifier
@@ -104,14 +123,38 @@ fun ReplayOverlay(
                                 .border(1.dp, GlassBorder, RoundedCornerShape(22.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            BoardView(
-                                board = board,
-                                cellSizeDp = cellSizeDp,
-                                shakeCell = null,
-                                onTapCell = {},
-                                modifier = Modifier.size(boardWidthDp, boardHeightDp),
-                                firingCell = frame.firedFrom,
-                            )
+                            Box(modifier = Modifier.size(boardWidthDp, boardHeightDp)) {
+                                BoardView(
+                                    board = displayBoard,
+                                    cellSizeDp = cellSizeDp,
+                                    shakeCell = null,
+                                    onTapCell = {},
+                                    firingCell = if (showBeam) frame.firedFrom else null,
+                                )
+                                if (showBeam) {
+                                    val shotResult = frame.shotResult
+                                    val origin = frame.firedFrom
+                                    if (shotResult != null && origin != null) {
+                                        BeamCanvas(
+                                            shot = ShotAnimation(
+                                                originKey = origin,
+                                                result = shotResult,
+                                                bends = frame.shotBends,
+                                                hitIsShooterClash = frame.shotHitIsShooterClash,
+                                                token = replay.stepIndex.toLong(),
+                                            ),
+                                            cellSizePx = cellSizePx,
+                                            gapPx = gapPx,
+                                            onRevealFinished = {},
+                                            onSettled = {
+                                                displayBoard = frame.board
+                                                showBeam = false
+                                            },
+                                            modifier = Modifier.size(boardWidthDp, boardHeightDp),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

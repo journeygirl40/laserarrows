@@ -2,6 +2,7 @@ package com.laserarrows.app.ui.game
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -27,12 +28,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -167,9 +170,27 @@ private fun ShooterGlow(color: Color, flash: Float, active: Boolean, sizeDp: Dp)
         ),
         label = "shooterBreathAlpha",
     )
-    val baseAlpha = if (active) breath else 0.22f
+    // 単純な呼吸だけだと機械的なので、周期の違う揺らぎを重ねて火種のような不規則さを出す。
+    val flicker by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(370, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shooterFlicker",
+    )
+    val baseAlpha = if (active) breath * flicker else 0.22f
     val glowAlpha = (baseAlpha * 0.4f + flash * 0.55f).coerceIn(0f, 1f)
     val glowScale = 1f + flash * 0.35f
+    // 花火の光暈のように、外側のやわらかい広がりを1枚重ねてから芯の光を置く。
+    Box(
+        modifier = Modifier
+            .size(sizeDp * 0.98f)
+            .scale(glowScale)
+            .clip(CircleShape)
+            .background(Brush.radialGradient(listOf(color.copy(alpha = glowAlpha * 0.32f), color.copy(alpha = 0f)))),
+    )
     Box(
         modifier = Modifier
             .size(sizeDp * 0.68f)
@@ -177,6 +198,45 @@ private fun ShooterGlow(color: Color, flash: Float, active: Boolean, sizeDp: Dp)
             .clip(CircleShape)
             .background(Brush.radialGradient(listOf(color.copy(alpha = glowAlpha), color.copy(alpha = 0f)))),
     )
+    // 芯の白熱コア(花火の光条が根元で白く熱くなるのと同じ質感を、発射前の火種にも持たせる)。
+    val coreAlpha = if (active) (0.55f + flash * 0.45f).coerceAtMost(1f) * flicker else 0.3f
+    Box(
+        modifier = Modifier
+            .size(sizeDp * (0.22f + flash * 0.1f))
+            .scale(glowScale)
+            .clip(CircleShape)
+            .background(Brush.radialGradient(listOf(Color.White.copy(alpha = coreAlpha), color.copy(alpha = coreAlpha * 0.7f), color.copy(alpha = 0f)))),
+    )
+    // 発射待ちの火種らしい、細かくきらめく十字の光条(受光側より速く・強めに明滅させて「これから発射する」energy差を出す)。
+    val sparkleTransition = rememberInfiniteTransition(label = "shooterSparkle")
+    val sparkleRotation by sparkleTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(3400, easing = LinearEasing)),
+        label = "shooterSparkleRotation",
+    )
+    val sparkleAlpha by sparkleTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(420, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shooterSparkleAlpha",
+    )
+    if (active) {
+        Canvas(modifier = Modifier.size(sizeDp * 0.8f).rotate(sparkleRotation)) {
+            val r = size.minDimension / 2f
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val inner = r * 0.45f
+            val a = sparkleAlpha * flicker
+            drawLine(Color.White.copy(alpha = a), Offset(cx, cy - r), Offset(cx, cy - inner), strokeWidth = 1.3f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = a), Offset(cx, cy + inner), Offset(cx, cy + r), strokeWidth = 1.3f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = a * 0.7f), Offset(cx - r, cy), Offset(cx - inner, cy), strokeWidth = 1.1f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = a * 0.7f), Offset(cx + inner, cy), Offset(cx + r, cy), strokeWidth = 1.1f, cap = StrokeCap.Round)
+        }
+    }
 }
 
 @Composable
@@ -200,6 +260,23 @@ private fun ReceiverOrb(color: Color, sizeDp: Dp) {
         ),
         label = "orbHalo",
     )
+    // 打ち上がる前の花火玉のように、ゆっくり回るきらめきを重ねる(halo/coreとは別周期で回転・明滅させ、機械的に見えないようにする)。
+    val sparkleTransition = rememberInfiniteTransition(label = "orbSparkle")
+    val sparkleRotation by sparkleTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(5200, easing = LinearEasing)),
+        label = "orbSparkleRotation",
+    )
+    val sparkleAlpha by sparkleTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "orbSparkleAlpha",
+    )
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(sizeDp)) {
         Box(
             modifier = Modifier
@@ -215,6 +292,16 @@ private fun ReceiverOrb(color: Color, sizeDp: Dp) {
                 .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(Color.White, color))),
         )
+        Canvas(modifier = Modifier.size(sizeDp * 0.86f).rotate(sparkleRotation)) {
+            val r = size.minDimension / 2f
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val inner = r * 0.4f
+            drawLine(Color.White.copy(alpha = sparkleAlpha), Offset(cx, cy - r), Offset(cx, cy - inner), strokeWidth = 1.4f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = sparkleAlpha), Offset(cx, cy + inner), Offset(cx, cy + r), strokeWidth = 1.4f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = sparkleAlpha * 0.7f), Offset(cx - r, cy), Offset(cx - inner, cy), strokeWidth = 1.2f, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = sparkleAlpha * 0.7f), Offset(cx + inner, cy), Offset(cx + r, cy), strokeWidth = 1.2f, cap = StrokeCap.Round)
+        }
         Box(
             modifier = Modifier
                 .size(sizeDp * 0.14f)

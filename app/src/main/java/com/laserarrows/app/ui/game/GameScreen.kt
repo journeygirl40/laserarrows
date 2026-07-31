@@ -161,6 +161,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 history = uiState.importHistory,
                 sortKey = uiState.favoriteSortKey,
                 sortDescending = uiState.favoriteSortDescending,
+                hasActiveRun = uiState.hasActiveRun,
+                activeLevel = uiState.level,
                 onSetSortKey = { viewModel.setFavoriteSortKey(it) },
                 onSetSortDescending = { viewModel.setFavoriteSortDescending(it) },
                 onSelect = { viewModel.selectFavorite(it) },
@@ -246,7 +248,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 HomeIconButton(onClick = { viewModel.goHome() })
             }
             HudBar(
-                level = uiState.level,
+                levelLabel = if (uiState.isEditorTest) "テスト" else uiState.level.toString(),
                 score = uiState.score,
                 combo = uiState.combo,
                 lives = uiState.lives,

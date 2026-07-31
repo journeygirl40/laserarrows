@@ -47,6 +47,7 @@ import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.Bg3
 import com.laserarrows.app.ui.theme.DangerColor
+import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.PurpleAccent
@@ -61,6 +62,8 @@ fun FavoritesOverlay(
     history: List<ImportHistoryEntry>,
     sortKey: FavoriteSortKey,
     sortDescending: Boolean,
+    hasActiveRun: Boolean,
+    activeLevel: Int,
     onSetSortKey: (FavoriteSortKey) -> Unit,
     onSetSortDescending: (Boolean) -> Unit,
     onSelect: (ImportHistoryEntry) -> Unit,
@@ -73,6 +76,8 @@ fun FavoritesOverlay(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var confirmingEntry by remember { mutableStateOf<ImportHistoryEntry?>(null) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -172,7 +177,9 @@ fun FavoritesOverlay(
                     items(sortedHistory, key = { it.importedAt }) { entry ->
                         FavoriteItem(
                             entry = entry,
-                            onClick = { onSelect(entry) },
+                            onClick = {
+                                if (hasActiveRun) confirmingEntry = entry else onSelect(entry)
+                            },
                             onShare = { onShare(entry) },
                             onDelete = { onDelete(entry) },
                             onEditMemo = { newMemo -> onEditMemo(entry, newMemo) },
@@ -192,6 +199,44 @@ fun FavoritesOverlay(
                     modifier = Modifier.weight(1f),
                 )
                 GhostButton("戻る", onClick = onBack, modifier = Modifier.weight(1f))
+            }
+        }
+
+        confirmingEntry?.let { entry ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xCC0A0814)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .background(Bg3, RoundedCornerShape(20.dp))
+                        .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("このお気に入りをプレイしますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(
+                        "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
+                        fontSize = 12.5.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GhostButton("キャンセル", onClick = { confirmingEntry = null }, modifier = Modifier.weight(1f))
+                        GhostButton(
+                            "プレイする",
+                            onClick = {
+                                onSelect(entry)
+                                confirmingEntry = null
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
     }

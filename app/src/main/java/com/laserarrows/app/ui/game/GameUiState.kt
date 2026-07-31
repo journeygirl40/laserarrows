@@ -31,6 +31,23 @@ sealed class HistoryEntry {
 
 data class LevelSnapshot(val board: Board, val lives: Int, val score: Int, val combo: Int = 0)
 
+/** エディタの「テストプレイ」に入る前の本来のラン状態の退避先。テストを抜けたら復元し、テスト中の進行で上書きされないようにする。 */
+data class SavedRun(
+    val level: Int,
+    val score: Int,
+    val combo: Int,
+    val lives: Int,
+    val board: Board,
+    val remainingReceivers: Int,
+    val history: List<HistoryEntry>,
+    val levelSnapshot: LevelSnapshot?,
+    val isImported: Boolean,
+    val activeFavoriteImportedAt: Long?,
+    val bestScoreAtRunStart: Int,
+    val crossedHighScoreThisRun: Boolean,
+    val crossedLevelRecordThisRun: Boolean,
+)
+
 data class ShotAnimation(
     val originKey: CellPos,
     val result: LaserResult,
@@ -102,5 +119,7 @@ data class GameUiState(
     /** 現在プレイ中の盤面が由来するお気に入り/インポート履歴エントリのID(importedAt)。クリア時にそのエントリの記録を更新するために使う。 */
     val activeFavoriteImportedAt: Long? = null,
     val isEditorTest: Boolean = false,
+    /** テストプレイに入る前の本来のラン。テストを抜けたタイミングで復元する。 */
+    val savedRun: SavedRun? = null,
     val editorState: EditorState = EditorState(),
 )

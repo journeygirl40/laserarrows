@@ -3,6 +3,7 @@ package com.laserarrows.app.audio
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
+import com.laserarrows.app.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -30,18 +31,14 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
 
     private val soundIds = mutableMapOf<String, Int>()
 
+    /** 発射音(laser.mp3)の再生中ストリームID。着弾音が鳴り始めたら途中でも打ち切る。 */
+    private var fireStreamId: Int = 0
+
     init {
+        soundIds["laser"] = soundPool.load(appContext, R.raw.laser, 1)
+        soundIds["fireflower"] = soundPool.load(appContext, R.raw.fireflower, 1)
         scope.launch(Dispatchers.IO) {
-            // 発射音: 高音スイープにユニゾンデチューンと倍音を重ねて「しゅん」に厚みを出す。
-            preload("fire_sweep_high", 5500.0, 1600.0, 0.055, Waveform.SAWTOOTH, attackSec = 0.002, unisonVoices = 2, detuneCents = 9.0, harmonics = listOf(2 to 0.3))
-            preload("fire_sweep_mid", 3200.0, 1100.0, 0.04, Waveform.TRIANGLE, attackSec = 0.002, unisonVoices = 2, detuneCents = 7.0)
-            preload("fire_noise", 7000.0, 2500.0, 0.025, Waveform.NOISE, noiseSmoothing = 0.5)
             preload("hit_tick", 3000.0, 4200.0, 0.035, Waveform.SINE, harmonics = listOf(2 to 0.25))
-            // 着弾音: シャードの倍音を増やして煌めきを、インパクトにサブベースの厚みを追加。
-            preload("connect_crack", 4500.0, 900.0, 0.05, Waveform.NOISE, noiseSmoothing = 0.25)
-            preload("connect_shard_low", 2400.0, 1200.0, 0.16, Waveform.TRIANGLE, harmonics = listOf(2 to 0.3, 3 to 0.12))
-            preload("connect_shard_high", 6000.0, 3000.0, 0.16, Waveform.TRIANGLE, harmonics = listOf(2 to 0.3, 3 to 0.12))
-            preload("connect_impact", 85.0, 38.0, 0.11, Waveform.SINE, attackSec = 0.004, unisonVoices = 2, detuneCents = 4.0)
             // ミス音: 濁った倍音を足して虚しさを強調。
             preload("miss_thud", 180.0, 90.0, 0.15, Waveform.SAWTOOTH, attackSec = 0.01, harmonics = listOf(2 to 0.22))
             preload("miss_noise", 700.0, 100.0, 0.12, Waveform.NOISE, noiseSmoothing = 0.55)
@@ -89,34 +86,38 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** 光が鋭く伸びる「しゅん」という短くシャープな発射音(低音の撃ち出し感は持たせず、高音のスイープのみ)。 */
+    /** 発射音(laser.mp3)。着弾音(playConnect)が鳴り始めたら途切れさせる。 */
     fun playFire() {
-        play("fire_sweep_high", volume = 0.13)
-        play("fire_sweep_mid", volume = 0.07)
-        play("fire_noise", volume = 0.045)
+        val id = soundIds["laser"] ?: return
+        fireStreamId = soundPool.play(id, FIRE_VOLUME, FIRE_VOLUME, 1, 0, 1f)
     }
 
-    /** ビームが的に届いた瞬間の短く軽いタッチ音(直後の破砕音の前振り)。 */
+    /** ビームが的に届いた瞬間の短く軽いタッチ音(直後の着弾音の前振り)。 */
     fun playHitConfirm() {
         play("hit_tick", volume = 0.1)
     }
 
-    /** ガラスや氷が砕け散るような、不協和な高音が重なり合う爽快な着弾音。 */
-    fun playConnect(combo: Int) {
-        val comboBoost = (1.0 + combo * 0.02).coerceIn(1.0, 1.6)
-        play("connect_crack", volume = 0.17)
-        val shards = listOf(
-            Triple("connect_shard_low", 2400.0, 0.075),
-            Triple("connect_shard_low", 3100.0, 0.067),
-            Triple("connect_shard_low", 3900.0, 0.059),
-            Triple("connect_shard_low", 4800.0, 0.051),
-            Triple("connect_shard_high", 6000.0, 0.043),
-        )
-        shards.forEachIndexed { i, (name, targetFreq, vol) ->
-            val baseFreq = if (name == "connect_shard_low") 2400.0 else 6000.0
-            play(name, volume = vol, rate = targetFreq / baseFreq * comboBoost, delayMs = (i * 8).toLong())
+    /** 受光して消える瞬間の音(fireflower.mp3)。発射音が鳴り続けていれば打ち切ってから鳴らし、
+     * 全体を3秒として2秒地点から3秒地点にかけてフェードアウトさせる。 */
+    fun playConnect(@Suppress("UNUSED_PARAMETER") combo: Int) {
+        if (fireStreamId != 0) {
+            soundPool.stop(fireStreamId)
+            fireStreamId = 0
         }
-        play("connect_impact", volume = 0.13, rate = (1.0 + combo * 0.03).coerceIn(0.5, 2.0))
+        val id = soundIds["fireflower"] ?: return
+        val streamId = soundPool.play(id, CONNECT_VOLUME, CONNECT_VOLUME, 1, 0, 1f)
+        if (streamId == 0) return
+        scope.launch {
+            delay(FADE_START_MS)
+            val steps = 20
+            val stepDelayMs = (FADE_DURATION_MS / steps).coerceAtLeast(1L)
+            for (step in 1..steps) {
+                val v = (CONNECT_VOLUME * (1f - step.toFloat() / steps)).coerceAtLeast(0f)
+                soundPool.setVolume(streamId, v, v)
+                delay(stepDelayMs)
+            }
+            soundPool.stop(streamId)
+        }
     }
 
     fun playMiss() {
@@ -152,5 +153,13 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         listOf(880.0, 1046.0, 1318.0, 1568.0, 2093.0).forEachIndexed { i, f ->
             play("sparkle_blip", volume = 0.14, rate = f / 880.0, delayMs = (i * 55).toLong())
         }
+    }
+
+    companion object {
+        private const val FIRE_VOLUME = 0.8f
+        private const val CONNECT_VOLUME = 0.8f
+        // fireflower.mp3は全体3秒を想定し、2秒地点から3秒地点(=1秒かけて)フェードアウトする。
+        private const val FADE_START_MS = 2000L
+        private const val FADE_DURATION_MS = 1000L
     }
 }

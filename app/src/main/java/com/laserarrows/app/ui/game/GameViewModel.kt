@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,8 +62,9 @@ class GameViewModel(
             }
             // プレイ中の盤面・ライフ・スコア等を都度保存し、アプリのプロセスが落ちても「再開する」で復元できるようにする。
             // 復元処理より前に監視を始めると、復元前の初期状態を保存して既存のデータを消してしまうため、必ず復元後に開始する。
+            // テストプレイ中は本来のラン(savedRunに退避済み)を上書きしたくないので、その間は保存自体をスキップする。
             launch {
-                uiState.map { serializeActiveRun(it) }.distinctUntilChanged().collect { serialized ->
+                uiState.filter { !it.isEditorTest }.map { serializeActiveRun(it) }.distinctUntilChanged().collect { serialized ->
                     progressStore.saveActiveRun(serialized)
                 }
             }
@@ -152,20 +154,18 @@ class GameViewModel(
     fun goEditor() = _uiState.update { it.copy(overlay = Overlay.Editor) }
     fun editorBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
     fun gameOverHome() = _uiState.update {
-        it.copy(
-            overlay = when {
-                it.isEditorTest -> Overlay.Editor
-                it.isImported -> Overlay.Favorites
-                else -> Overlay.Home
-            },
-        )
+        when {
+            it.isEditorTest -> restoreFromEditorTest(it).copy(overlay = Overlay.Editor)
+            it.isImported -> it.copy(overlay = Overlay.Favorites)
+            else -> it.copy(overlay = Overlay.Home)
+        }
     }
 
     /** レベルクリア画面から「ホームに戻る」。次のレベルを先読み生成してアクティブランにし、スコア・ライフを引き継いだまま「再開する」で戻れるようにする。 */
     fun clearHome() {
         val current = _uiState.value
         when {
-            current.isEditorTest -> _uiState.update { it.copy(overlay = Overlay.Editor) }
+            current.isEditorTest -> _uiState.update { restoreFromEditorTest(it).copy(overlay = Overlay.Editor) }
             current.isImported -> _uiState.update { it.copy(overlay = Overlay.Favorites) }
             else -> {
                 _uiState.update { it.copy(level = current.level + 1) }
@@ -174,16 +174,45 @@ class GameViewModel(
         }
     }
 
-    /** プレイ中にいつでもホームへ(自作パズルのテストプレイ中はエディタへ)。盤面・スコア・ライフ等はそのまま保持し、後で再開できる。 */
+    /** プレイ中にいつでもホームへ(自作パズルのテストプレイ中はエディタへ、その際は退避しておいた本来のランを復元する)。盤面・スコア・ライフ等はそのまま保持し、後で再開できる。 */
     fun goHome() {
         val current = _uiState.value
         if (current.busy) return
         _uiState.update {
-            it.copy(
-                overlay = if (it.isEditorTest) Overlay.Editor else Overlay.Home,
+            val wasEditorTest = it.isEditorTest
+            val restored = if (wasEditorTest) restoreFromEditorTest(it) else it
+            restored.copy(
+                overlay = if (wasEditorTest) Overlay.Editor else Overlay.Home,
                 addingLight = false,
                 pendingLightCell = null,
             )
+        }
+    }
+
+    /** テストプレイを抜ける際、退避しておいた本来のラン([SavedRun])があればそれに戻す。無ければ(テスト前にランが無かった場合)アクティブランなしの状態にする。 */
+    private fun restoreFromEditorTest(state: GameUiState): GameUiState {
+        val saved = state.savedRun
+        return if (saved != null) {
+            state.copy(
+                level = saved.level,
+                score = saved.score,
+                combo = saved.combo,
+                lives = saved.lives,
+                board = saved.board,
+                remainingReceivers = saved.remainingReceivers,
+                history = saved.history,
+                levelSnapshot = saved.levelSnapshot,
+                isImported = saved.isImported,
+                activeFavoriteImportedAt = saved.activeFavoriteImportedAt,
+                bestScoreAtRunStart = saved.bestScoreAtRunStart,
+                crossedHighScoreThisRun = saved.crossedHighScoreThisRun,
+                crossedLevelRecordThisRun = saved.crossedLevelRecordThisRun,
+                hasActiveRun = true,
+                isEditorTest = false,
+                savedRun = null,
+            )
+        } else {
+            state.copy(hasActiveRun = false, isEditorTest = false, savedRun = null)
         }
     }
 
@@ -428,6 +457,26 @@ class GameViewModel(
         }
         val displayLevel = PuzzleGenerator.estimateLevelForBoard(board)
         _uiState.update {
+            // テスト前に本来のランが進行中だった場合は、テストで上書きされないよう退避しておく。
+            val savedRun = if (it.hasActiveRun && !it.isEditorTest) {
+                SavedRun(
+                    level = it.level,
+                    score = it.score,
+                    combo = it.combo,
+                    lives = it.lives,
+                    board = it.board,
+                    remainingReceivers = it.remainingReceivers,
+                    history = it.history,
+                    levelSnapshot = it.levelSnapshot,
+                    isImported = it.isImported,
+                    activeFavoriteImportedAt = it.activeFavoriteImportedAt,
+                    bestScoreAtRunStart = it.bestScoreAtRunStart,
+                    crossedHighScoreThisRun = it.crossedHighScoreThisRun,
+                    crossedLevelRecordThisRun = it.crossedLevelRecordThisRun,
+                )
+            } else {
+                it.savedRun
+            }
             GameUiState(
                 overlay = Overlay.None,
                 level = displayLevel,
@@ -445,6 +494,7 @@ class GameViewModel(
                 hasActiveRun = true,
                 isImported = true,
                 isEditorTest = true,
+                savedRun = savedRun,
                 editorState = it.editorState,
             )
         }
@@ -470,7 +520,7 @@ class GameViewModel(
             return
         }
         val result = LaserSimulator.fireLaser(current.board, pos)
-        val bends = findBends(result.path)
+        val bends = ReplayEngine.findBends(result.path)
         val hitIsShooterClash = result.hit?.let { current.board.tiles[it] is Tile.Shooter } ?: false
         sfxEngine.playFire()
         _uiState.update {
@@ -490,17 +540,6 @@ class GameViewModel(
             }
         }
         return ReplayEngine.encodeSteps(steps)
-    }
-
-    private fun findBends(path: List<CellPos>): Set<CellPos> {
-        if (path.size < 3) return emptySet()
-        val bends = mutableSetOf<CellPos>()
-        for (i in 1 until path.size - 1) {
-            val d1 = path[i].row - path[i - 1].row to path[i].col - path[i - 1].col
-            val d2 = path[i + 1].row - path[i].row to path[i + 1].col - path[i].col
-            if (d1 != d2) bends += path[i]
-        }
-        return bends
     }
 
     /** ビーム経路のリビールアニメーションが完了した時点でCompose側から呼ばれる。 */

@@ -20,6 +20,12 @@ object ReplayEngine {
         val hitAt: CellPos?,
         /** 直前の手が光源設置だった場合、その設置先セル(演出・表示用)。 */
         val lightAddedAt: CellPos?,
+        /** 直前の手が発射だった場合の、ビーム経路描画用の結果(発射元→着弾までの経路・色)。 */
+        val shotResult: LaserResult?,
+        /** ビームが曲がる中継セル(演出用)。 */
+        val shotBends: Set<CellPos>,
+        /** 着弾先が光る球ではなく別の矢印だった場合(狙い通りの接続ではない見た目にする)。 */
+        val shotHitIsShooterClash: Boolean,
     )
 
     fun encodeSteps(steps: List<Step>): String = steps.joinToString(";") { step ->
@@ -69,13 +75,20 @@ object ReplayEngine {
         var firedFrom: CellPos? = null
         var hitAt: CellPos? = null
         var lightAddedAt: CellPos? = null
+        var shotResult: LaserResult? = null
+        var shotBends: Set<CellPos> = emptySet()
+        var shotHitIsShooterClash = false
         for (i in 0 until stepIndex) {
             when (val step = steps[i]) {
                 is Step.Fire -> {
                     lightAddedAt = null
-                    val hit = LaserSimulator.fireLaser(board, step.origin).hit
+                    val result = LaserSimulator.fireLaser(board, step.origin)
+                    val hit = result.hit
                     firedFrom = step.origin
                     hitAt = hit
+                    shotResult = result
+                    shotBends = findBends(result.path)
+                    shotHitIsShooterClash = hit?.let { board.tiles[it] is Tile.Shooter } ?: false
                     if (hit == null) continue
                     val wasReceiver = board.tiles[hit] is Tile.Receiver
                     combo = if (wasReceiver) combo + 1 else 0
@@ -88,9 +101,24 @@ object ReplayEngine {
                     hitAt = null
                     lightAddedAt = step.cell
                     combo = 0
+                    shotResult = null
+                    shotBends = emptySet()
+                    shotHitIsShooterClash = false
                 }
             }
         }
-        return Frame(board, score, combo, firedFrom, hitAt, lightAddedAt)
+        return Frame(board, score, combo, firedFrom, hitAt, lightAddedAt, shotResult, shotBends, shotHitIsShooterClash)
+    }
+
+    /** ビーム経路のうち曲がり角に当たるセル(演出用)。GameViewModelの発射時の見た目と合わせる。 */
+    internal fun findBends(path: List<CellPos>): Set<CellPos> {
+        if (path.size < 3) return emptySet()
+        val bends = mutableSetOf<CellPos>()
+        for (i in 1 until path.size - 1) {
+            val d1 = path[i].row - path[i - 1].row to path[i].col - path[i - 1].col
+            val d2 = path[i + 1].row - path[i].row to path[i + 1].col - path[i].col
+            if (d1 != d2) bends += path[i]
+        }
+        return bends
     }
 }

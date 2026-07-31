@@ -41,7 +41,7 @@ import com.laserarrows.app.ui.theme.TextPrimary
 
 @Composable
 fun HudBar(
-    level: Int,
+    levelLabel: String,
     score: Int,
     combo: Int,
     lives: Int,
@@ -55,7 +55,7 @@ fun HudBar(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HudBlock(
                 label = "LEVEL",
-                value = level.toString(),
+                value = levelLabel,
                 valueColor = if (inLevelRecordTerritory) Neon2 else TextPrimary,
                 modifier = Modifier.weight(1f),
             )
