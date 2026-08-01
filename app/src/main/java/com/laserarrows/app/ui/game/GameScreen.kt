@@ -328,6 +328,14 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                 onSettled = { viewModel.onShotSettled() },
                                 modifier = Modifier.size(boardWidthDp, boardHeightDp),
                             )
+                            if (uiState.overlay is Overlay.Clear) {
+                                ClearFinaleCanvas(
+                                    finale = uiState.clearFinale,
+                                    cellSizePx = cellSizePx,
+                                    gapPx = gapPx,
+                                    modifier = Modifier.size(boardWidthDp, boardHeightDp),
+                                )
+                            }
                         }
                     }
 

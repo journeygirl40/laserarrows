@@ -275,6 +275,7 @@ class GameViewModel(
                     history = emptyList(),
                     levelSnapshot = LevelSnapshot(board, it.lives, it.score, it.combo),
                     overlay = targetOverlay,
+                    clearFinale = null,
                     hasActiveRun = true,
                     isImported = false,
                     isEditorTest = false,
@@ -793,11 +794,16 @@ class GameViewModel(
                 viewModelScope.launch { progressStore.recordFavoriteClear(favoriteImportedAt, livesLost, replayLog) }
             }
         }
+        val finaleBursts = current.history
+            .filterIsInstance<HistoryEntry.Shot>()
+            .filter { it.wasReceiver }
+            .map { FinaleBurst(it.removedBPos, it.removedBTile.color) }
         _uiState.update {
             it.copy(
                 score = totalScore,
                 overlay = Overlay.Clear(totalScore, livesLost),
                 hasActiveRun = false,
+                clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,
             )
         }
     }

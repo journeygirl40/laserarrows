@@ -156,8 +156,8 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
     }
 
     companion object {
-        private const val FIRE_VOLUME = 0.8f
-        private const val CONNECT_VOLUME = 0.8f
+        private const val FIRE_VOLUME = 0.4f
+        private const val CONNECT_VOLUME = 0.4f
         // fireflower.mp3は全体3秒を想定し、2秒地点から3秒地点(=1秒かけて)フェードアウトする。
         private const val FADE_START_MS = 2000L
         private const val FADE_DURATION_MS = 1000L

@@ -57,6 +57,12 @@ data class ShotAnimation(
     val token: Long,
 )
 
+/** レベルクリア時、その盤面で命中した1箇所分の花火(位置と色)。 */
+data class FinaleBurst(val pos: CellPos, val color: LaserColor)
+
+/** レベルクリア画面で、そのステージ中に鳴らした花火を全て一斉に打ち上げる祝賀演出。 */
+data class ClearFinale(val bursts: List<FinaleBurst>, val token: Long)
+
 data class ToastMessage(val text: String, val isDanger: Boolean = false, val token: Long = 0L)
 
 data class ComboPopup(val combo: Int, val token: Long = 0L)
@@ -98,6 +104,7 @@ data class GameUiState(
     val scoreBonusPopup: ScoreBonusPopup? = null,
     val highScorePopup: HighScorePopup? = null,
     val levelRecordPopup: LevelRecordPopup? = null,
+    val clearFinale: ClearFinale? = null,
     val crossedHighScoreThisRun: Boolean = false,
     val crossedLevelRecordThisRun: Boolean = false,
     val bestLevel: Int = 1,
