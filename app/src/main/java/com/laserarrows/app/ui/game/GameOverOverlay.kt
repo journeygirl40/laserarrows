@@ -96,7 +96,7 @@ fun GameOverOverlay(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.widthIn(max = 320.dp)) {
             StatTile(icon = R.drawable.icon_seedling, label = "到達レベル", value = "Lv.$level", modifier = Modifier.weight(1f))
-            StatTile(icon = R.drawable.icon_baby, label = "赤ちゃん", value = "${score}匹", modifier = Modifier.weight(1f))
+            StatTile(icon = R.drawable.icon_paw, label = "なかま", value = "${score}匹", modifier = Modifier.weight(1f))
         }
 
         if (isNearMiss) {

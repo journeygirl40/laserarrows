@@ -21,6 +21,10 @@ sealed class Overlay {
         val stars: Int = 0,
         /** このステージで出会えたふたり組(出会った順)。クリア画面下のパレードに並べる。 */
         val couples: List<ClearCouple> = emptyList(),
+        /** このクリアで森のなかまに加わった赤ちゃんの数(お気に入り・自作のテストでは0=森は育たない)。 */
+        val populationGain: Int = 0,
+        /** 広告を見てpopulationGainをもう一度もらった(=2倍にした)か。1回のクリアにつき1度だけ。 */
+        val doubled: Boolean = false,
     ) : Overlay()
     data class GameOver(val beatBest: Boolean) : Overlay()
     data class ColorPick(val cell: CellPos, val choices: List<LaserColor>) : Overlay()

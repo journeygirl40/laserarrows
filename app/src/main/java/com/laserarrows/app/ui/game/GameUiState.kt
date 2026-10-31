@@ -125,8 +125,14 @@ data class GameUiState(
     val eggIntroSeen: Boolean = false,
     /** タイトルの森の段階をどこまで見届けたか。読み込み前はnull(その間は「にぎやかになった!」を出さない)。 */
     val forestStageSeen: Int? = null,
+    /** 森の広さの段階をどこまで見届けたか。読み込み前はnull(その間は「森が広がった!」を出さない)。 */
+    val forestExpansionSeen: Int? = null,
     /** 「なぞのたまご」の説明を今表示しているか(初めてたまごが出た盤面で一度だけ)。 */
     val showEggIntro: Boolean = false,
+    /** 「なかまの増え方」の説明を見たことがあるか。読み込み前はnull(その間は自動では出さない)。 */
+    val scoreHelpSeen: Boolean? = null,
+    /** 「なかまの増え方」の説明を今表示しているか(最初のプレイで一度だけ自動で、あとは「?」から)。 */
+    val showScoreHelp: Boolean = false,
     /** 盤面を作っている最中の進捗(0〜1)。作っていない時はnull。1秒以上かかる時だけ読み込みバーを出す。 */
     val loadingProgress: Float? = null,
     /** 今の盤面のパー(レベル開始時点のコンボから取れる理論上の最高点)。計算中はnull。 */

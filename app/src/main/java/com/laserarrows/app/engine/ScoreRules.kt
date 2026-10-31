@@ -5,6 +5,9 @@ import kotlin.math.roundToInt
 object ScoreRules {
     fun comboMultiplier(combo: Int): Double = 1.0 + combo * 0.1
 
+    /** コンボで上乗せされる割合(%)。画面で「なかま +30%」のように見せる。 */
+    fun comboBonusPercent(combo: Int): Int = combo * 10
+
     /** 命中までに違う種類の矢印に道案内された(曲がった)回数。 */
     fun relayCount(result: LaserResult): Int = result.redirects
 

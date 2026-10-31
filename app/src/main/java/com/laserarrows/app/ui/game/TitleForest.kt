@@ -6,7 +6,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -93,26 +95,39 @@ private val SLEEPERS = listOf(
     Resident(R.drawable.animal_rabbit, 0.62f, 0.6f, 52f, 0, Habit.SLEEP, 1.6f),
 )
 
+/** ホームの森で何が育ったのか。LIVELY=にぎわい(ハイスコア)、WIDE=広さ(森のなかまの累計)。 */
+enum class ForestGrowth { LIVELY, WIDE }
+
+/** ホームで一度だけ見せる「森が育った」お祝い。fromからtoまでの段階で増えたものがポンと現れる。 */
+data class ForestCelebration(val kind: ForestGrowth, val from: Int, val to: Int)
+
+/** お祝い1回分の長さ。続けて2つある時(にぎわいと広さが同時に育った時)は、この間を空けて順に見せる。 */
+const val FOREST_CELEBRATION_MS = 3900L
+
+/** 森の広さの段階で増える、緑の祝い色。 */
+val ForestGreen = Color(0xFF8CD867)
+
 private val FLOWER_COLORS = listOf(Color(0xFFFF8FB1), Color(0xFFFFD25E), Color(0xFFFFFFFF), Color(0xFFB79CFF), Color(0xFFFF9E5E))
 private val FLAG_COLORS = listOf(Color(0xFFFF6F61), Color(0xFFFFC84A), Color(0xFF6CCB6A), Color(0xFF5DB8FF), Color(0xFFB98BFF), Color(0xFFFF9E4F))
 
 /**
- * タイトルの森のジオラマ。ハイスコアの段階([ForestStage])が上がるほど住人・木・花・飾りが増え、
- * 住人の動きも大きく速く(=元気に)なる。段階が上がった直後(celebrateLevel)は、新しく来た住人がポンと現れ、
- * ハートが弾けて「森がにぎやかになった!」と知らせる(何段も一気に上がった時は、その間に来た住人がみんなポンと現れる)。
+ * タイトルの森のジオラマ。2つの軸で育つ。
+ * - にぎわい(level=[ForestStage]、ハイスコア): 住人が増え、動きも大きく速く(=元気に)なる。
+ * - 広さ(expansion=[ForestExpansion]、森のなかまの累計): 丘が広がり、花畑・小川・橋・池・おうち・ツリーハウス・ホタル・虹が増える。
+ * 段階が上がった直後(celebration)は、増えたものがポンと現れ、ハートが弾けて「にぎやかになった!/広がった!」と知らせる。
  */
 @Composable
-fun TitleForest(level: Int, celebrateLevel: Int?, celebrateFrom: Int = 0, modifier: Modifier = Modifier) {
+fun TitleForest(level: Int, expansion: Int, celebration: ForestCelebration?, modifier: Modifier = Modifier) {
     var time by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
         while (true) withFrameNanos { time = (it - start) / 1_000_000_000f }
     }
-    val pop = remember(celebrateLevel) { Animatable(if (celebrateLevel == null) 1f else 0f) }
-    val burst = remember(celebrateLevel) { Animatable(if (celebrateLevel == null) 1f else 0f) }
-    val banner = remember(celebrateLevel) { Animatable(0f) }
-    LaunchedEffect(celebrateLevel) {
-        if (celebrateLevel == null) return@LaunchedEffect
+    val pop = remember(celebration) { Animatable(if (celebration == null) 1f else 0f) }
+    val burst = remember(celebration) { Animatable(if (celebration == null) 1f else 0f) }
+    val banner = remember(celebration) { Animatable(0f) }
+    LaunchedEffect(celebration) {
+        if (celebration == null) return@LaunchedEffect
         delay(350)
         launch { pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 260f)) }
         launch { burst.animateTo(1f, tween(1500, easing = LinearEasing)) }
@@ -126,24 +141,29 @@ fun TitleForest(level: Int, celebrateLevel: Int?, celebrateFrom: Int = 0, modifi
     val seedling = ImageBitmap.imageResource(R.drawable.icon_seedling)
     val house = ImageBitmap.imageResource(R.drawable.icon_house)
     val heart = ImageBitmap.imageResource(R.drawable.icon_heart)
-    val loveHearts = remember(celebrateLevel) { randomLoveHearts(celebrateLevel?.toLong() ?: 0L) }
+    val loveHearts = remember(celebration) { randomLoveHearts(celebration?.hashCode()?.toLong() ?: 0L) }
 
     Box(modifier = modifier.fillMaxWidth().height(172.dp), contentAlignment = Alignment.TopCenter) {
         Canvas(modifier = Modifier.matchParentSize()) {
-            val scene = SceneScope(this, level, time)
+            val scene = SceneScope(this, level, expansion, celebration, pop.value, time)
             scene.drawBackdrop()
+            scene.drawRainbow()
             scene.drawMound()
+            scene.drawStream()
+            scene.drawPond()
+            scene.drawBigTree(tree, house)
             scene.drawTrees(tree, seedling, house)
             scene.drawFlowers()
             scene.drawBunting()
-            scene.drawResidents(residentArt, celebrateLevel, celebrateFrom, pop.value)
+            scene.drawResidents(residentArt)
             scene.drawButterflies()
+            scene.drawFireflies()
             scene.drawFloatingHearts(heart)
             scene.drawSparkles()
-            if (celebrateLevel != null && burst.value in 0.001f..0.999f) {
+            if (celebration != null && burst.value in 0.001f..0.999f) {
                 drawLoveBurst(
                     center = Offset(size.width / 2f, scene.moundY - 40f * scene.u),
-                    animalColor = GoldColor,
+                    animalColor = if (celebration.kind == ForestGrowth.WIDE) ForestGreen else GoldColor,
                     heart = heart,
                     hearts = loveHearts,
                     cellSizePx = 110f * scene.u,
@@ -151,13 +171,20 @@ fun TitleForest(level: Int, celebrateLevel: Int?, celebrateFrom: Int = 0, modifi
                 )
             }
         }
-        if (celebrateLevel != null && banner.value > 0.01f) {
-            val stage = ForestStage.stages[celebrateLevel.coerceIn(0, ForestStage.stages.lastIndex)]
+        if (celebration != null && banner.value > 0.01f) {
+            val wide = celebration.kind == ForestGrowth.WIDE
+            val stages = if (wide) ForestExpansion.stages else ForestStage.stages
+            val stage = stages[celebration.to.coerceIn(0, stages.lastIndex)]
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 4.dp).scale(0.6f + 0.4f * banner.value).alpha(banner.value.coerceIn(0f, 1f)),
             ) {
-                GameText("森がにぎやかになった!", fontSize = 20.sp, color = GoldColor, outline = WoodDark)
+                GameText(
+                    if (wide) "森が広がった!" else "森がにぎやかになった!",
+                    fontSize = 20.sp,
+                    color = if (wide) ForestGreen else GoldColor,
+                    outline = WoodDark,
+                )
                 Text(
                     "「${stage.name}」 ${stage.news}",
                     fontSize = 11.sp,
@@ -172,61 +199,117 @@ fun TitleForest(level: Int, celebrateLevel: Int?, celebrateFrom: Int = 0, modifi
     }
 }
 
-/** タイトル下の「森のにぎわい」札。今の段階と、次の段階までハイスコアがあと何匹かを見せて、次の挑戦の目標にしてもらう。 */
+/**
+ * タイトル下の森の育ち具合の札。上段=にぎわい(ハイスコアで育つ)、下段=広さ(森のなかまの累計で育つ)。
+ * それぞれ次の段階まであと何匹かを見せ、どのモードを遊べば何が育つのかが一目でわかるようにする。
+ */
 @Composable
-fun ForestProgressPill(bestScore: Int, modifier: Modifier = Modifier) {
-    val stage = ForestStage.of(bestScore)
-    val next = ForestStage.next(stage)
+fun ForestProgressPill(bestScore: Int, population: Int, modifier: Modifier = Modifier) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
         modifier = modifier
             .widthIn(max = 320.dp)
             .background(GlassFill.copy(alpha = 0.88f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = 14.dp, vertical = 7.dp),
     ) {
-        Text(
-            if (stage.level == 0) "なかまを出会わせて、赤ちゃんを増やそう" else "森のにぎわい Lv.${stage.level}「${stage.name}」",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            color = if (stage.level >= 7) GoldText else TextPrimary,
+        val lively = ForestStage.of(bestScore)
+        ForestGrowthRow(
+            title = "🎉 にぎわい Lv.${lively.level}「${lively.name}」",
+            hint = "ハイスコアで育つ",
+            value = bestScore,
+            stage = lively,
+            next = ForestStage.next(lively),
+            unit = "ハイスコア",
+            color = GoldColor,
+            done = "いちばんにぎやかな森になりました!",
         )
+        val wide = ForestExpansion.of(population)
+        ForestGrowthRow(
+            title = "🌳 広さ Lv.${wide.level}「${wide.name}」",
+            hint = "クリアするたび育つ",
+            value = population,
+            stage = wide,
+            next = ForestExpansion.next(wide),
+            unit = "なかま",
+            color = ForestGreen,
+            done = "いちばん広い森になりました!",
+        )
+    }
+}
+
+@Composable
+private fun ForestGrowthRow(
+    title: String,
+    hint: String,
+    value: Int,
+    stage: ForestStage.Stage,
+    next: ForestStage.Stage?,
+    unit: String,
+    color: Color,
+    done: String,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = TextPrimary, modifier = Modifier.weight(1f))
+            Text(hint, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+        }
         if (next != null) {
-            val progress = ((bestScore - stage.minScore).toFloat() / (next.minScore - stage.minScore)).coerceIn(0f, 1f)
-            Canvas(modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp)) {
-                val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
-                drawRoundRect(WoodDark.copy(alpha = 0.18f), cornerRadius = r)
-                if (progress > 0f) {
-                    drawRoundRect(
-                        Brush.horizontalGradient(listOf(Color(0xFF8CD867), GoldColor)),
-                        size = Size(size.width * progress, size.height),
-                        cornerRadius = r,
-                    )
-                }
-            }
-            Text(
-                "ハイスコアあと${next.minScore - bestScore}匹で「${next.name}」に",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextMuted,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            ForestProgressBar(((value - stage.minScore).toFloat() / (next.minScore - stage.minScore)).coerceIn(0f, 1f), color)
+            Text("${unit}${value}匹 ・ あと${next.minScore - value}匹で「${next.name}」に", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
         } else {
-            Text("いちばんにぎやかな森になりました!", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = GoldText)
+            Text(done, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = GoldText)
+        }
+    }
+}
+
+/** 次の段階までの進み具合のバー。 */
+@Composable
+fun ForestProgressBar(progress: Float, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.padding(vertical = 3.dp).fillMaxWidth().height(6.dp)) {
+        val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
+        drawRoundRect(WoodDark.copy(alpha = 0.18f), cornerRadius = r)
+        if (progress > 0f) {
+            drawRoundRect(
+                Brush.horizontalGradient(listOf(lerp(color, Color.White, 0.35f), color)),
+                size = Size(size.width * progress, size.height),
+                cornerRadius = r,
+            )
         }
     }
 }
 
 /**
  * ジオラマ1コマ分の描画。u=デザイン上の1dpに当たるpx(高さ172dpを基準)。
- * 段階(level)ごとに、何が出るか・どれだけ元気に動くか(energy)を決める。
+ * にぎわい(level)で住人と、どれだけ元気に動くか(energy)を、広さ(expansion)で丘の幅と景色を決める。
+ * pop=お祝い中に新しく増えたものが現れる度合い(0→1)。
  */
-private class SceneScope(val ds: DrawScope, val level: Int, val t: Float) {
+private class SceneScope(
+    val ds: DrawScope,
+    val level: Int,
+    val expansion: Int,
+    val celebration: ForestCelebration?,
+    val pop: Float,
+    val t: Float,
+) {
     val w = ds.size.width
     val h = ds.size.height
     val u = h / 172f
     val cx = w / 2f
     val moundY = h - 36f * u
-    val rx = minOf(w * 0.47f, 175f * u)
+
+    /** 広さの段階stageで増えるものの、今の現れ具合(0=まだ無い、1=ある)。お祝い中の段階はpopに合わせて育つ。 */
+    fun grown(stage: Int): Float = when {
+        expansion < stage -> 0f
+        celebration?.kind == ForestGrowth.WIDE && stage in celebration.from..celebration.to -> pop
+        else -> 1f
+    }
+
+    /** 丘の幅。広さの段階が上がるほど左右へ広がり、お祝い中は前の広さから今の広さへ伸びていく。 */
+    private val wideness = run {
+        val c = celebration
+        if (c?.kind == ForestGrowth.WIDE) (c.from - 1) + (expansion - (c.from - 1)) * pop.coerceIn(0f, 1f) else expansion.toFloat()
+    }
+    val rx = minOf(w * 0.47f, 175f * u) * (0.82f + 0.18f * wideness / ForestExpansion.stages.lastIndex)
     val ry = 24f * u
     /** 住人の元気さ。段階が上がるほど跳ねる高さも速さも増す。 */
     val energy = 0.55f + 0.1f * level
@@ -309,10 +392,11 @@ private class SceneScope(val ds: DrawScope, val level: Int, val t: Float) {
             val sway = sin(t * 0.9f + xf * 7f) * (1.5f + level * 0.3f)
             ds.drawSprite(tree, SpritePose(center = base - Offset(0f, s * 0.42f), ground = base, rotation = sway, alpha = if (far) 0.85f else 1f), s)
         }
-        if (level >= 5) {
+        val houseIn = grown(5)
+        if (houseIn > 0.01f) {
             val base = groundAt(0.76f, -0.1f)
             val s = 40f * u
-            ds.drawSprite(house, SpritePose(center = base - Offset(0f, s * 0.4f), ground = base), s)
+            ds.drawSprite(house, SpritePose(center = base - Offset(0f, s * 0.4f), ground = base, scaleX = houseIn, scaleY = houseIn, alpha = houseIn.coerceIn(0f, 1f)), s)
         }
         if (level <= 1) {
             val base = groundAt(0.5f, 0.15f)
@@ -322,22 +406,27 @@ private class SceneScope(val ds: DrawScope, val level: Int, val t: Float) {
     }
 
     fun drawFlowers() = with(ds) {
-        if (level < 2) return@with
-        val count = (3 + (level - 2) * 3).coerceAtMost(16)
+        val bloom = grown(1)
+        if (bloom <= 0.01f) return@with
+        // 花畑は広さの段階が上がるたびに少しずつ増える(お祝いで増えた分だけがポンと咲く)。
+        val count = (6 + (expansion - 1) * 2).coerceAtMost(20)
+        val before = celebration?.takeIf { it.kind == ForestGrowth.WIDE }?.let { if (it.from <= 1) 0 else (6 + (it.from - 2) * 2).coerceAtMost(20) } ?: count
         val rnd = Random(7)
         repeat(count) { i ->
+            val bud = if (i < before) 1f else pop
             val a = rnd.nextFloat() * 2f * piF
             val r = 0.45f + rnd.nextFloat() * 0.5f
             val p = Offset(cx + cos(a) * rx * r * 0.92f, moundY + sin(a) * ry * r * 0.75f)
             val color = FLOWER_COLORS[i % FLOWER_COLORS.size]
             val sway = sin(t * 1.6f + i) * 2f * u
-            val head = p + Offset(sway, -7f * u)
+            if (bud <= 0.01f) return@repeat
+            val head = p + Offset(sway, -7f * u * bud)
             drawLine(Color(0xFF4E9A3A), p, head, strokeWidth = 1.4f * u, cap = StrokeCap.Round)
             for (k in 0 until 5) {
                 val pa = k * 2f * piF / 5f + t * 0.2f
-                drawCircle(color, radius = 2.3f * u, center = head + Offset(cos(pa) * 2.4f * u, sin(pa) * 2.4f * u))
+                drawCircle(color, radius = 2.3f * u * bud, center = head + Offset(cos(pa) * 2.4f * u * bud, sin(pa) * 2.4f * u * bud))
             }
-            drawCircle(Color(0xFFFFB84A), radius = 1.6f * u, center = head)
+            drawCircle(Color(0xFFFFB84A), radius = 1.6f * u * bud, center = head)
         }
     }
 
@@ -368,11 +457,12 @@ private class SceneScope(val ds: DrawScope, val level: Int, val t: Float) {
         }
     }
 
-    fun drawResidents(art: Map<Int, ImageBitmap>, celebrateLevel: Int?, celebrateFrom: Int, pop: Float) {
+    fun drawResidents(art: Map<Int, ImageBitmap>) {
         val cast = if (level == 0) SLEEPERS else RESIDENTS.filter { it.intro <= level }
+        val c = celebration
         cast.sortedBy { it.depth }.forEach { r ->
             val image = art[r.art] ?: return@forEach
-            val isNew = celebrateLevel != null && r.intro in celebrateFrom..celebrateLevel
+            val isNew = c?.kind == ForestGrowth.LIVELY && r.intro in c.from..c.to
             val appear = if (isNew) pop else 1f
             if (appear <= 0.01f) return@forEach
             val pose = poseOf(r)
@@ -533,6 +623,178 @@ private class SceneScope(val ds: DrawScope, val level: Int, val t: Float) {
             drawLine(color.copy(alpha = a), p - Offset(r, 0f), p + Offset(r, 0f), strokeWidth = 1.3f * u, cap = StrokeCap.Round)
             drawLine(color.copy(alpha = a), p - Offset(0f, r), p + Offset(0f, r), strokeWidth = 1.3f * u, cap = StrokeCap.Round)
             drawCircle(Color.White.copy(alpha = a), radius = 1.1f * u, center = p)
+        }
+    }
+
+    /** 虹の森: 丘の後ろに大きな虹がかかり、ゆっくりきらめく。 */
+    fun drawRainbow() = with(ds) {
+        val a = grown(8)
+        if (a <= 0.01f) return@with
+        val c = Offset(cx, moundY + 6f * u)
+        val bands = listOf(0xFFFF7A7A, 0xFFFFB25E, 0xFFFFE36B, 0xFF8CD867, 0xFF6FC3FF, 0xFFA98BFF)
+        val shimmer = 0.85f + 0.15f * sin(t * 1.1f)
+        bands.forEachIndexed { k, hex ->
+            val r = (128f - k * 6.5f) * u
+            drawArc(
+                Color(hex).copy(alpha = 0.42f * a.coerceIn(0f, 1f) * shimmer),
+                startAngle = 180f,
+                sweepAngle = 180f * a.coerceIn(0f, 1f),
+                useCenter = false,
+                topLeft = Offset(c.x - r, c.y - r),
+                size = Size(r * 2f, r * 2f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6.5f * u),
+            )
+        }
+    }
+
+    /** 小川の通り道(丘の奥から手前の縁まで)。橋もこの線の途中に架ける。 */
+    private fun streamPoint(f: Float): Offset {
+        val xf = 0.2f + 0.1f * f + sin(f * piF * 2f) * 0.035f
+        return groundAt(xf, -0.25f + 1.75f * f)
+    }
+
+    /** 小川の森: 丘の奥から手前へ小川が流れ、縁から小さな滝になって落ちる。水面の光が流れていく。 */
+    fun drawStream() = with(ds) {
+        val a = grown(2)
+        if (a <= 0.01f) return@with
+        val reach = a.coerceIn(0f, 1f)
+        val steps = 24
+        val path = Path()
+        for (i in 0..steps) {
+            val p = streamPoint(reach * i / steps)
+            if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+        }
+        val stroke = { wpx: Float -> androidx.compose.ui.graphics.drawscope.Stroke(width = wpx, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round) }
+        drawPath(path, Color(0xFF6C9A4E).copy(alpha = 0.5f), style = stroke(10f * u))
+        drawPath(path, Brush.verticalGradient(listOf(Color(0xFF9EDCFF), Color(0xFF4FAEEA)), startY = moundY - ry, endY = moundY + ry), style = stroke(6.5f * u))
+        // 流れる光の粒。
+        for (k in 0 until 5) {
+            val f = ((t * 0.35f + k / 5f) % 1f) * reach
+            drawCircle(Color.White.copy(alpha = 0.75f * sin(f / reach.coerceAtLeast(0.01f) * piF)), radius = 1.3f * u, center = streamPoint(f))
+        }
+        if (reach >= 0.99f) {
+            // 丘の縁から土の側面を伝って落ちる小さな滝と、しぶき。
+            val lip = streamPoint(1f)
+            val foot = lip + Offset(0f, 10f * u)
+            drawLine(Color(0xFF7CC8F2), lip, foot, strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(Color.White.copy(alpha = 0.6f), lip + Offset(-1f * u, (t * 18f % 1f) * 8f * u), lip + Offset(-1f * u, (t * 18f % 1f) * 8f * u + 2.5f * u), strokeWidth = 1.2f * u, cap = StrokeCap.Round)
+            for (k in 0 until 3) {
+                val f = (t * 1.4f + k / 3f) % 1f
+                drawCircle(Color.White.copy(alpha = 0.7f * (1f - f)), radius = (1f + 2f * f) * u, center = foot + Offset((k - 1) * 3.5f * u * f, -3f * u * f))
+            }
+        }
+        drawBridge()
+    }
+
+    /** 橋のある森: 小川の真ん中に、手すりつきの丸い木の橋が架かる。 */
+    private fun drawBridge() = with(ds) {
+        val a = grown(3)
+        if (a <= 0.01f) return@with
+        val mid = streamPoint(0.5f)
+        val half = 13f * u * a
+        val arch = 5f * u * a
+        val deck = Path().apply {
+            moveTo(mid.x - half, mid.y + 1f * u)
+            quadraticTo(mid.x, mid.y - arch * 2f, mid.x + half, mid.y + 1f * u)
+        }
+        val wood = { wpx: Float -> androidx.compose.ui.graphics.drawscope.Stroke(width = wpx, cap = StrokeCap.Round) }
+        drawPath(deck, Color(0xFF6E4325), style = wood(6f * u))
+        drawPath(deck, Color(0xFFC08A55), style = wood(4f * u))
+        // 板の継ぎ目と手すり。
+        for (k in 1..4) {
+            val f = k / 5f
+            val x = mid.x - half + half * 2f * f
+            val y = mid.y + 1f * u - 4f * arch * f * (1f - f)
+            drawLine(Color(0xFF8E5A2C), Offset(x, y - 1.8f * u), Offset(x, y + 1.8f * u), strokeWidth = 0.8f * u)
+            drawLine(Color(0xFF8E5A2C), Offset(x, y - 1.5f * u), Offset(x, y - 6f * u), strokeWidth = 1.1f * u, cap = StrokeCap.Round)
+        }
+        val rail = Path().apply {
+            moveTo(mid.x - half, mid.y - 4.5f * u)
+            quadraticTo(mid.x, mid.y - arch * 2f - 5.5f * u, mid.x + half, mid.y - 4.5f * u)
+        }
+        drawPath(rail, Color(0xFF8E5A2C), style = wood(1.4f * u))
+    }
+
+    /** 池のある森: 丘の右手前に池ができ、スイレンの葉と花が浮かび、波紋が広がる。 */
+    fun drawPond() = with(ds) {
+        val a = grown(4)
+        if (a <= 0.01f) return@with
+        val c = groundAt(0.8f, 0.95f)
+        val pw = 40f * u * a
+        val ph = 11f * u * a
+        drawOval(Color(0xFF5E8C43).copy(alpha = 0.55f), topLeft = Offset(c.x - pw / 2f - 2f * u, c.y - ph / 2f - 1f * u), size = Size(pw + 4f * u, ph + 3f * u))
+        drawOval(
+            Brush.verticalGradient(listOf(Color(0xFF7FCBF5), Color(0xFF3F96D6)), startY = c.y - ph / 2f, endY = c.y + ph / 2f),
+            topLeft = Offset(c.x - pw / 2f, c.y - ph / 2f),
+            size = Size(pw, ph),
+        )
+        drawOval(Color.White.copy(alpha = 0.35f), topLeft = Offset(c.x - pw * 0.3f, c.y - ph * 0.38f), size = Size(pw * 0.32f, ph * 0.22f))
+        if (a < 0.99f) return@with
+        for (k in 0 until 2) {
+            val f = (t * 0.5f + k * 0.5f) % 1f
+            val rw = pw * (0.12f + 0.3f * f)
+            drawOval(
+                Color.White.copy(alpha = 0.5f * (1f - f)),
+                topLeft = Offset(c.x + pw * 0.12f - rw / 2f, c.y - rw * 0.14f),
+                size = Size(rw, rw * 0.28f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9f * u),
+            )
+        }
+        listOf(Triple(-0.28f, 0.05f, true), Triple(0.22f, -0.12f, false), Triple(-0.02f, 0.2f, false)).forEachIndexed { i, (dx, dy, flower) ->
+            val bob = sin(t * 1.2f + i * 2f) * 0.6f * u
+            val p = Offset(c.x + dx * pw, c.y + dy * ph + bob)
+            drawOval(Color(0xFF4FA83A), topLeft = Offset(p.x - 4f * u, p.y - 1.6f * u), size = Size(8f * u, 3.2f * u))
+            drawLine(Color(0xFF3F96D6), p, p + Offset(3f * u, -0.8f * u), strokeWidth = 0.9f * u)
+            if (flower) {
+                for (k in 0 until 5) {
+                    val pa = k * 2f * piF / 5f
+                    drawCircle(Color(0xFFFFA6C9), radius = 1.5f * u, center = p + Offset(cos(pa) * 1.6f * u, -1.8f * u + sin(pa) * 0.9f * u))
+                }
+                drawCircle(Color(0xFFFFE07A), radius = 0.9f * u, center = p + Offset(0f, -1.8f * u))
+            }
+        }
+    }
+
+    /** 大きな木の森: 丘の左奥に大きな木がそびえ、枝の上にツリーハウスとはしごがある。 */
+    fun drawBigTree(tree: ImageBitmap, house: ImageBitmap) = with(ds) {
+        val a = grown(6)
+        if (a <= 0.01f) return@with
+        val base = groundAt(0.25f, -0.32f)
+        val s = 98f * u
+        val sway = sin(t * 0.6f) * 1.2f
+        ds.drawSprite(tree, SpritePose(center = base - Offset(0f, s * 0.42f), ground = base, scaleX = a, scaleY = a, rotation = sway, alpha = a.coerceIn(0f, 1f)), s)
+        if (a < 0.99f) return@with
+        val hs = 26f * u
+        val hp = base - Offset(-4f * u, s * 0.5f)
+        drawLine(Color(0xFF8E5A2C), hp + Offset(-5f * u, hs * 0.3f), base + Offset(-5f * u, -2f * u), strokeWidth = 1.2f * u)
+        drawLine(Color(0xFF8E5A2C), hp + Offset(-1f * u, hs * 0.3f), base + Offset(-1f * u, -2f * u), strokeWidth = 1.2f * u)
+        var y = hp.y + hs * 0.4f
+        while (y < base.y - 4f * u) {
+            drawLine(Color(0xFF8E5A2C), Offset(hp.x - 5f * u, y), Offset(hp.x - 1f * u, y), strokeWidth = 1f * u)
+            y += 4f * u
+        }
+        drawRect(Color(0xFF8E5A2C), topLeft = Offset(hp.x - hs * 0.55f, hp.y + hs * 0.28f), size = Size(hs * 1.1f, 2.2f * u))
+        ds.drawSprite(house, SpritePose(center = hp, ground = hp + Offset(0f, hs * 0.3f)), hs)
+    }
+
+    /** ホタルの森: 木のまわりと丘の上を、ホタルがふわふわ飛びながら明滅する。 */
+    fun drawFireflies() = with(ds) {
+        val a = grown(7)
+        if (a <= 0.01f) return@with
+        val rnd = Random(23)
+        repeat(12) { i ->
+            val bx = cx + (rnd.nextFloat() - 0.5f) * rx * 1.9f
+            val by = moundY - (14f + rnd.nextFloat() * 70f) * u
+            val sp = 0.4f + rnd.nextFloat() * 0.5f
+            val p = Offset(bx + sin(t * sp + i * 1.7f) * 12f * u, by + cos(t * sp * 1.3f + i) * 7f * u)
+            val glow = (0.5f + 0.5f * sin(t * (2f + rnd.nextFloat() * 2f) + i * 2.3f)).let { it * it }
+            val r = 7f * u
+            drawCircle(
+                Brush.radialGradient(listOf(Color(0xFFE9FF8A).copy(alpha = 0.55f * glow * a.coerceIn(0f, 1f)), Color.Transparent), center = p, radius = r),
+                radius = r,
+                center = p,
+            )
+            drawCircle(Color(0xFFF7FFC2).copy(alpha = (0.35f + 0.65f * glow) * a.coerceIn(0f, 1f)), radius = 1.3f * u, center = p)
         }
     }
 }

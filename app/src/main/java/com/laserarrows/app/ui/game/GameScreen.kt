@@ -123,6 +123,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 forestPopulation = uiState.forestPopulation,
                 forestStageSeen = uiState.forestStageSeen,
                 onForestStageCelebrated = { viewModel.onForestStageCelebrated(it) },
+                forestExpansionSeen = uiState.forestExpansionSeen,
+                onForestExpansionCelebrated = { viewModel.onForestExpansionCelebrated(it) },
                 totalStars = uiState.totalStars,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
@@ -168,7 +170,6 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 sortDescending = uiState.levelListSortDescending,
                 onToggleSort = { viewModel.setLevelListSortDescending(!uiState.levelListSortDescending) },
                 onSelectLevel = { viewModel.selectLevel(it) },
-                onResetRatings = { viewModel.resetLevelRatings() },
                 onBack = { viewModel.listBack() },
             )
 
@@ -222,6 +223,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
 
         if (uiState.showEggIntro && uiState.overlay == Overlay.None) {
             EggIntroDialog(onClose = { viewModel.dismissEggIntro() })
+        } else if (uiState.showScoreHelp && uiState.overlay == Overlay.None) {
+            ScoreHelpDialog(onClose = { viewModel.dismissScoreHelp() })
         }
 
         // 盤面づくりが1秒以上かかった時だけ読み込みバーを出す(すぐ終わる時にチラつかせない)。
@@ -293,6 +296,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 scoreBonusPopup = uiState.scoreBonusPopup,
                 levelScore = uiState.levelScore,
                 par = uiState.par,
+                onScoreHelp = { viewModel.openScoreHelp() },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -304,7 +308,11 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val board = uiState.board
                 val hasBoard = board.cols > 0 && board.rows > 0
-                val gapDp = 5.dp
+                // マスの大きさと隙間を画面の1ピクセル単位にそろえる。半端なピクセルのままだと、行ごとに四捨五入の向きが変わって
+                // マスの位置が1〜2ピクセルずつ上下にずれ、上に重ねて描くキャラクターや線ともずれてしまう。
+                val density = LocalDensity.current
+                fun androidx.compose.ui.unit.Dp.snapToPx(): androidx.compose.ui.unit.Dp = with(density) { kotlin.math.floor(toPx()).coerceAtLeast(0f).toDp() }
+                val gapDp = 5.dp.snapToPx()
                 val marginDp = 10.dp
 
                 val cellSizeDp: androidx.compose.ui.unit.Dp
@@ -315,7 +323,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                     val availH = maxHeight - marginDp * 2
                     val cellFromW = (availW - gapDp * (board.cols - 1)) / board.cols
                     val cellFromH = (availH - gapDp * (board.rows - 1)) / board.rows
-                    cellSizeDp = if (cellFromW < cellFromH) cellFromW else cellFromH
+                    cellSizeDp = (if (cellFromW < cellFromH) cellFromW else cellFromH).snapToPx()
                     boardWidthDp = cellSizeDp * board.cols + gapDp * (board.cols - 1)
                     boardHeightDp = cellSizeDp * board.rows + gapDp * (board.rows - 1)
                 } else {
@@ -443,6 +451,22 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                         onNext = { viewModel.clearNext() },
                                         onHome = { viewModel.clearHome() },
                                         onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
+                                        populationGain = overlay.populationGain,
+                                        doubled = overlay.doubled,
+                                        population = uiState.forestPopulation,
+                                        onWatchAdToDouble = {
+                                            val activity = context as? Activity
+                                            val app = context.applicationContext as LaserArrowsApplication
+                                            if (activity != null) {
+                                                app.rewardedAdManager.show(
+                                                    activity = activity,
+                                                    onRewarded = { viewModel.doubleClearRewardWithAd() },
+                                                    onUnavailable = { viewModel.notifyAdUnavailable() },
+                                                )
+                                            } else {
+                                                viewModel.notifyAdUnavailable()
+                                            }
+                                        },
                                     )
                                     is Overlay.GameOver -> GameOverOverlay(
                                         level = uiState.level,

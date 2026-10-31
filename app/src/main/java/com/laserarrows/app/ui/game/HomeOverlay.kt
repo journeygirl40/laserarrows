@@ -24,7 +24,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,6 +49,9 @@ import com.laserarrows.app.ui.theme.PurpleAccent
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
 import com.laserarrows.app.ui.theme.WoodDark
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 private enum class ChallengeMode { HIGH_SCORE, LEVEL_UP }
 
@@ -56,6 +61,8 @@ fun HomeOverlay(
     forestPopulation: Int,
     forestStageSeen: Int?,
     onForestStageCelebrated: (level: Int) -> Unit,
+    forestExpansionSeen: Int?,
+    onForestExpansionCelebrated: (level: Int) -> Unit,
     totalStars: Int,
     nextLevel: Int,
     hasActiveRun: Boolean,
@@ -72,15 +79,34 @@ fun HomeOverlay(
 ) {
     var confirmingMode by remember { mutableStateOf<ChallengeMode?>(null) }
 
-    // ハイスコアで森の段階が上がっていたら、ホームに戻ってきた時に一度だけ「にぎやかになった!」を見せる。
+    // 森の段階が上がっていたら、ホームに戻ってきた時に一度だけお祝いを見せる。
+    // ハイスコアで「にぎやかになった!」、森のなかまの累計で「森が広がった!」。両方ある時は順番に見せる。
     val forestLevel = ForestStage.of(bestScore).level
-    var celebrateLevel by remember { mutableStateOf<Int?>(null) }
-    var celebrateFrom by remember { mutableStateOf(0) }
+    val expansionLevel = ForestExpansion.of(forestPopulation).level
+    val pending = remember { mutableStateListOf<ForestCelebration>() }
+    var celebration by remember { mutableStateOf<ForestCelebration?>(null) }
+    fun enqueue(c: ForestCelebration) {
+        pending.removeAll { it.kind == c.kind && it != celebration }
+        if (c !in pending) pending += c
+    }
     LaunchedEffect(forestLevel, forestStageSeen) {
-        if (forestStageSeen != null && forestLevel > forestStageSeen) {
-            celebrateFrom = forestStageSeen + 1
-            celebrateLevel = forestLevel
-            onForestStageCelebrated(forestLevel)
+        if (forestStageSeen != null && forestLevel > forestStageSeen) enqueue(ForestCelebration(ForestGrowth.LIVELY, forestStageSeen + 1, forestLevel))
+    }
+    LaunchedEffect(expansionLevel, forestExpansionSeen) {
+        if (forestExpansionSeen != null && expansionLevel > forestExpansionSeen) {
+            enqueue(ForestCelebration(ForestGrowth.WIDE, forestExpansionSeen + 1, expansionLevel))
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val next = snapshotFlow { pending.firstOrNull() }.filterNotNull().first()
+            celebration = next
+            when (next.kind) {
+                ForestGrowth.LIVELY -> onForestStageCelebrated(next.to)
+                ForestGrowth.WIDE -> onForestExpansionCelebrated(next.to)
+            }
+            delay(FOREST_CELEBRATION_MS)
+            pending.remove(next)
         }
     }
 
@@ -109,10 +135,10 @@ fun HomeOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TitleForest(level = forestLevel, celebrateLevel = celebrateLevel, celebrateFrom = celebrateFrom)
+                TitleForest(level = forestLevel, expansion = expansionLevel, celebration = celebration)
                 GameText("アニマル・リンク", fontSize = 38.sp, color = Color(0xFFFFF6DE), outline = WoodDark)
                 Spacer(modifier = Modifier.height(8.dp))
-                ForestProgressPill(bestScore = bestScore)
+                ForestProgressPill(bestScore = bestScore, population = forestPopulation)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -121,8 +147,6 @@ fun HomeOverlay(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                ForestCard(population = forestPopulation, totalStars = totalStars, modifier = Modifier.fillMaxWidth())
-
                 if (hasActiveRun) {
                     ContinueButton(
                         level = activeLevel,
@@ -140,7 +164,7 @@ fun HomeOverlay(
                     ChallengeCard(
                         icon = R.drawable.icon_trophy,
                         title = "ハイスコア\nチャレンジ",
-                        tagline = "コンボを繋いで自己ベスト更新",
+                        tagline = "コンボを繋いで森をにぎやかに",
                         badgeText = "ベスト ${bestScore}匹",
                         accentColor = PurpleAccent,
                         onClick = { onCardTap(ChallengeMode.HIGH_SCORE) },
@@ -149,7 +173,7 @@ fun HomeOverlay(
                     ChallengeCard(
                         icon = R.drawable.icon_rocket,
                         title = "レベルアップ\nチャレンジ",
-                        tagline = "コンボ気にせずどんどん先へ",
+                        tagline = "どんどん先へ進んで森を広げよう",
                         badgeText = "Lv.$nextLevel から",
                         accentColor = Neon2,
                         onClick = { onCardTap(ChallengeMode.LEVEL_UP) },
@@ -158,7 +182,7 @@ fun HomeOverlay(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    MenuTile(R.drawable.icon_scroll, "レベル一覧", onShowList, Modifier.weight(1f))
+                    MenuTile(R.drawable.icon_scroll, if (totalStars > 0) "レベル一覧 ★$totalStars" else "レベル一覧", onShowList, Modifier.weight(1f))
                     MenuTile(R.drawable.icon_bookmark, "お気に入り", onShowFavorites, Modifier.weight(1f))
                     MenuTile(R.drawable.icon_tools, "自分で作る", onShowEditor, Modifier.weight(1f))
                 }
@@ -181,7 +205,7 @@ fun HomeOverlay(
                     ) {
                         Text("${modeTitle}を始めますか？", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TextPrimary)
                         Text(
-                            "現在プレイ中のLv.${activeLevel}(赤ちゃん${activeScore}匹)の進行状況は消えます。",
+                            "現在プレイ中のLv.${activeLevel}(なかま${activeScore}匹)の進行状況は消えます。",
                             fontSize = 12.5.sp,
                             color = TextMuted,
                             textAlign = TextAlign.Center,
@@ -199,34 +223,6 @@ fun HomeOverlay(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/** これまでに生まれた赤ちゃんの累計を「森のなかま」として見せる(点数が積み上がって森が育つ実感を出す)。 */
-@Composable
-private fun ForestCard(population: Int, totalStars: Int, modifier: Modifier = Modifier) {
-    CreamCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(painterResource(R.drawable.icon_tree), contentDescription = null, modifier = Modifier.size(40.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("森のなかま", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
-                Text("${population}匹", fontSize = 24.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(GoldColor.copy(alpha = 0.18f), RoundedCornerShape(999.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Image(painterResource(R.drawable.icon_star), contentDescription = null, modifier = Modifier.size(22.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("$totalStars", fontSize = 18.sp, fontWeight = FontWeight.Black, color = TextPrimary)
             }
         }
     }
@@ -256,7 +252,7 @@ private fun ContinueButton(
             Column {
                 GameText("続きから", fontSize = 22.sp, color = Color.White, outline = Neon1Edge, textAlign = TextAlign.Start)
                 Text(
-                    "Lv.$level ・ 赤ちゃん${score}匹 ・ ライフ×$lives",
+                    "Lv.$level ・ なかま${score}匹 ・ ライフ×$lives",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,

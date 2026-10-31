@@ -105,10 +105,22 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         play("hit_touch", volume = HIT_TOUCH_VOLUME)
     }
 
-    /** 相手の子(ハート)に出会えた瞬間のベルの和音。コンボが続くほどペンタトニックで一段ずつ明るく上がる。 */
+    /**
+     * 相手の子(ハート)に出会えた瞬間のベルの和音。コンボが続くほどペンタトニックで一段ずつ明るく上がり、
+     * 1オクターブ上で止まる。そこから先は高さを変えず、キラッとした粒を重ねて「まだ続いている」ことを伝える。
+     */
     fun playConnect(combo: Int, delayMs: Long = 0) {
         val step = COMBO_STEPS[(combo - 1).coerceIn(0, COMBO_STEPS.lastIndex)]
         play("heart_arrival", volume = HEART_VOLUME, rate = 2.0.pow(step / 12.0), delayMs = delayMs)
+        val over = combo - COMBO_STEPS.size
+        if (over > 0) {
+            // 粒の数は続くほど増え(最大3つ)、並びもコンボごとにずらして毎回同じには聞こえないようにする。
+            val count = over.coerceAtMost(3)
+            for (k in 0 until count) {
+                val f = COMBO_SPARKLE_HZ[(over + k * 2) % COMBO_SPARKLE_HZ.size]
+                play("sparkle_blip", volume = COMBO_SPARKLE_VOLUME, rate = f / 880.0, delayMs = delayMs + 60 + k * 70L)
+            }
+        }
     }
 
     /** クリア画面のパレードで、出会えた組が1組ずつ現れるたびの木琴の音。組ごとにペンタトニックで駆け上がる。 */
@@ -167,8 +179,11 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         private const val TAP_VOLUME = 0.32
         private const val HIT_TOUCH_VOLUME = 0.14
         private const val HEART_VOLUME = 0.42
-        /** コンボ1,2,3,4以上での移調幅(半音)。ド→レ→ミ→ソ。高くなりすぎて耳に刺さらないよう5度で止める。 */
-        private val COMBO_STEPS = intArrayOf(0, 2, 4, 7)
+        /** コンボ1〜6以上での移調幅(半音)。ド→レ→ミ→ソ→ラ→高いド。耳に刺さらないよう1オクターブで止める。 */
+        private val COMBO_STEPS = intArrayOf(0, 2, 4, 7, 9, 12)
+        /** コンボ7以上で重ねるキラキラの音(ミ・ソ・ラ・ド)。 */
+        private val COMBO_SPARKLE_HZ = doubleArrayOf(1318.0, 1568.0, 1760.0, 1046.0)
+        private const val COMBO_SPARKLE_VOLUME = 0.08
         private const val PARADE_VOLUME = 0.18
         private const val PARADE_FINALE_VOLUME = 0.3
         /** パレードの音階(半音)。ド・レ・ミ・ソ・ラ・ドを繰り返し上る。 */

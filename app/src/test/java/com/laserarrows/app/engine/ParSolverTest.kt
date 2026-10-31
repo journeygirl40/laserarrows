@@ -54,7 +54,7 @@ class ParSolverTest {
     fun `パーは全消しできる手順の点で、途中で詰む手順の点は数えない`() {
         // 実機で、パーに到達したのに受信機が残って詰む盤面があった(固定シードのLv.3)。
         for (level in 1..20) {
-            var board = PuzzleGenerator.generateForLevel(level).board
+            var board = PuzzleGenerator.generateForLevel(level, kotlin.random.Random(level.toLong())).board
             val par = ParSolver.solve(board)
             if (par.approximate) continue
             var combo = 0
@@ -87,7 +87,7 @@ class ParSolverTest {
         val started = System.currentTimeMillis()
         for (level in 1..total) {
             val t0 = System.currentTimeMillis()
-            val board = PuzzleGenerator.generateForLevel(level).board
+            val board = PuzzleGenerator.generateForLevel(level, kotlin.random.Random(level.toLong())).board
             val genMs = System.currentTimeMillis() - t0
             val analysis = ParSolver.analyze(board)
             if (analysis.traps > 0) withTraps++

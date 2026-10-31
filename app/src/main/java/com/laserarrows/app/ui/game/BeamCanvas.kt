@@ -17,11 +17,19 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
 import com.laserarrows.app.R
 import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.ui.theme.EggTrail
+import com.laserarrows.app.ui.theme.RoundedFontFamily
 import com.laserarrows.app.ui.theme.animalRes
 import com.laserarrows.app.ui.theme.toComposeColor
 import kotlin.math.PI
@@ -70,6 +78,7 @@ fun BeamCanvas(
     val shockwave = remember(shot?.token) { Animatable(0f) }
     val burstProgress = remember(shot?.token) { Animatable(0f) }
     val meet = remember(shot?.token) { Animatable(0f) }
+    val textMeasurer = rememberTextMeasurer()
     val missFizzle = remember(shot?.token) { Animatable(0f) }
     val particles = remember(shot?.token) {
         val rnd = Random(shot?.token ?: 0L)
@@ -329,7 +338,77 @@ fun BeamCanvas(
             heartArt = heartArt,
             loveHearts = loveHearts,
         )
+
+        if (meetHit && hitPos != null) {
+            drawScoreChips(
+                path = path,
+                bends = s.bends,
+                hitPos = hitPos,
+                g = g,
+                m = m,
+                cellSizePx = cellSizePx,
+                stridePx = stridePx,
+                textMeasurer = textMeasurer,
+            )
+        }
     }
+}
+
+/**
+ * なかまがいくつ増えるのかを、増える場所でその場に見せる。
+ * 線が曲がった場所に、曲がった順に「+2」「+3」「+4」…、出会えた場所に「+1」がポンと出る
+ * (= [com.laserarrows.app.engine.ScoreRules.basePoints]の内訳。コンボの上乗せは、コンボ表示とスコアの「+〇」で見せる)。
+ * 出会えた時だけ出す(ぶつかった・出会えなかった時は、なかまは増えない)。
+ */
+private fun DrawScope.drawScoreChips(
+    path: List<CellPos>,
+    bends: Set<CellPos>,
+    hitPos: CellPos,
+    g: Float,
+    m: Float,
+    cellSizePx: Float,
+    stridePx: Float,
+    textMeasurer: TextMeasurer,
+) {
+    fun center(pos: CellPos) = Offset(pos.col * stridePx + cellSizePx / 2f, pos.row * stridePx + cellSizePx / 2f)
+    val fade = 1f - clamp01((m - 0.6f) / 0.35f)
+    if (fade <= 0f) return
+
+    // 白い丸札に色文字で「+2」などを出す。盤面の端でも欠けないよう、札はマスの中に収め、少しだけ浮き上がらせる。
+    fun chip(text: String, at: Offset, ageMs: Float, color: Color) {
+        if (ageMs < 0f) return
+        val pop = easeOutBack(ageMs / 220f)
+        val rise = easeOutCubic(ageMs / 500f) * cellSizePx * 0.1f
+        val style = TextStyle(fontFamily = RoundedFontFamily, fontWeight = FontWeight.Black, fontSize = (cellSizePx * 0.3f / density).sp, color = color)
+        val layout = textMeasurer.measure(text, style)
+        val c = Offset(at.x, at.y - rise)
+        val w = layout.size.width + cellSizePx * 0.2f
+        val h = layout.size.height + cellSizePx * 0.02f
+        val r = androidx.compose.ui.geometry.CornerRadius(h / 2f)
+        scale(pop, pivot = c) {
+            drawRoundRect(Color.Black.copy(alpha = 0.18f * fade), topLeft = Offset(c.x - w / 2f, c.y - h / 2f + cellSizePx * 0.03f), size = androidx.compose.ui.geometry.Size(w, h), cornerRadius = r)
+            drawRoundRect(Color.White.copy(alpha = fade), topLeft = Offset(c.x - w / 2f, c.y - h / 2f), size = androidx.compose.ui.geometry.Size(w, h), cornerRadius = r)
+            drawRoundRect(
+                color.copy(alpha = fade),
+                topLeft = Offset(c.x - w / 2f, c.y - h / 2f),
+                size = androidx.compose.ui.geometry.Size(w, h),
+                cornerRadius = r,
+                style = Stroke(width = cellSizePx * 0.035f),
+            )
+            drawText(layout, topLeft = Offset(c.x - layout.size.width / 2f, c.y - layout.size.height / 2f), alpha = fade)
+        }
+    }
+
+    // 曲がった順に、+2、+3、+4…(線が曲がり角に届いた瞬間に出る)。
+    var bonus = 1
+    for (i in 1 until path.size - 1) {
+        if (path[i] !in bends) continue
+        bonus++
+        val ageMs = (g - i) * MS_PER_SEGMENT + m * MEET_DURATION_MS
+        chip("+$bonus", center(path[i]) - Offset(0f, cellSizePx * 0.2f), ageMs, Color(0xFFE88A00))
+    }
+    // 出会えた場所に +1(二人がくっついた瞬間に出る)。
+    chip("+1", center(hitPos) + Offset(cellSizePx * 0.2f, cellSizePx * 0.28f), m * MEET_DURATION_MS - MEET_BUMP_DELAY_MS, Color(0xFFE5487A))
 }
 
 /**

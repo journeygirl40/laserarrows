@@ -63,6 +63,10 @@ fun ClearOverlay(
     onNext: () -> Unit,
     onHome: () -> Unit,
     onAddToFavorites: (memo: String) -> Unit,
+    populationGain: Int,
+    doubled: Boolean,
+    population: Int,
+    onWatchAdToDouble: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val perfect = livesLost == 0
@@ -86,12 +90,12 @@ fun ClearOverlay(
         GameText("CLEAR!", fontSize = 34.sp, color = GoldColor, outline = WoodDark)
         AnimatedStars(stars)
         Text(
-            if (levelScore >= par) "目標達成! 赤ちゃん${levelScore}匹 / 目標${par}匹" else "赤ちゃん${levelScore}匹 / 目標${par}匹 (★3まであと${par - levelScore}匹)",
+            if (levelScore >= par) "目標達成! なかま${levelScore}匹 / 目標${par}匹" else "なかま${levelScore}匹 / 目標${par}匹 (★3まであと${par - levelScore}匹)",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold,
             color = if (levelScore >= par) GoldText else TextPrimary,
         )
-        Text("このランの赤ちゃん ${totalScore}匹", fontSize = 12.sp, color = TextMuted)
+        Text("ここまでの合計 なかま${totalScore}匹", fontSize = 12.sp, color = TextMuted)
 
         Box(
             modifier = Modifier
@@ -110,6 +114,10 @@ fun ClearOverlay(
                     RecordChip("🚀 Lv.$level 到達レベル記録更新", Neon2)
                 }
             }
+        }
+
+        if (populationGain > 0) {
+            ForestGainCard(gain = populationGain, doubled = doubled, population = population, onWatchAdToDouble = onWatchAdToDouble)
         }
 
         if (!isImported) {
@@ -147,6 +155,40 @@ fun ClearOverlay(
             }
         } else {
             GhostButton(homeLabel, onClick = onHome)
+        }
+    }
+}
+
+/**
+ * このクリアで森のなかまに加わった赤ちゃんと、森が次に広がるまでの残り。
+ * 広告を見ると同じ数をもう一度もらえる(2倍)ことを、森が早く広がるご褒美として見せる。
+ */
+@Composable
+private fun ForestGainCard(gain: Int, doubled: Boolean, population: Int, onWatchAdToDouble: () -> Unit) {
+    val stage = ForestExpansion.of(population)
+    val next = ForestExpansion.next(stage)
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier
+            .widthIn(max = 300.dp)
+            .background(ForestGreen.copy(alpha = 0.16f), shape)
+            .border(1.dp, ForestGreen.copy(alpha = 0.6f), shape)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("🌳 森のなかま +${if (doubled) gain * 2 else gain}匹", fontSize = 14.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+            if (doubled) RecordChip("2倍!", GoldText)
+        }
+        if (next != null) {
+            ForestProgressBar(((population - stage.minScore).toFloat() / (next.minScore - stage.minScore)).coerceIn(0f, 1f), ForestGreen)
+            Text("あと${next.minScore - population}匹で森が広がる(「${next.name}」)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+        } else {
+            Text("いちばん広い森です", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldText)
+        }
+        if (!doubled) {
+            GhostButton("📺 広告を見て2倍に(+${gain}匹)", onClick = onWatchAdToDouble)
         }
     }
 }

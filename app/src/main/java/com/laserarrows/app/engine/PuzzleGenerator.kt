@@ -1,5 +1,7 @@
 package com.laserarrows.app.engine
 
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
 import kotlin.random.Random
 
 /**
@@ -67,13 +69,6 @@ object PuzzleGenerator {
         return cells
     }
 
-    /**
-     * 通常レベルの盤面はレベル番号から決まるシードで生成し、同じレベルは何度挑戦しても同じ盤面にする(★の取り直しに意味を持たせるため)。
-     * 注意: generate()の乱数の消費順を変えると、全レベルの盤面が変わってしまう。
-     */
-    fun seedForLevel(level: Int): Long = LEVEL_SEED_SALT + level
-
-    private const val LEVEL_SEED_SALT = 0x1A5E_A770_0000L
 
     private const val CANDIDATES_PER_LEVEL = 8
     private const val ANALYSIS_NODE_BUDGET = 30_000
@@ -92,19 +87,26 @@ object PuzzleGenerator {
      * 通常レベルの盤面。レベルのシードから候補をいくつか作り、迷いどころ(撃てるけれど詰む手)の数が
      * そのレベルの目標に最も近いものを選ぶ。目標に届く候補が複数あれば、超過が少ない(=難しすぎない)ものを優先する。
      */
-    fun generateForLevel(level: Int, onProgress: (Float) -> Unit = {}): Generated {
+    fun generateForLevel(level: Int, random: Random = Random(Random.nextLong()), onProgress: (Float) -> Unit = {}): Generated {
         val size = levelSize(level)
-        val random = Random(seedForLevel(level))
         val target = targetTraps(level)
-        // 候補を1つ作って分析するたびに進捗を知らせる(大きな盤面では数秒かかるので、読み込みバーに使う)。
-        // 乱数の消費順を変えないよう、候補の生成は必ずこの順番で行う。
-        val scored = List(CANDIDATES_PER_LEVEL) { i ->
-            val candidate = generateWithSolution(size.rows, size.cols, size.numPairs, random, eggChance(level))
-            val traps = ParSolver.analyze(candidate.board, nodeBudget = ANALYSIS_NODE_BUDGET).traps
-            onProgress((i + 1).toFloat() / CANDIDATES_PER_LEVEL)
-            candidate to (if (traps >= target) 1000 - (traps - target) else traps)
+        // 盤面は挑戦するたびに新しく作る(同じ盤面には二度と出会えない。気に入った盤面はお気に入り・共有で残せる)。
+        // 同じ乱数からは同じ盤面になるよう(テスト用)、候補の生成はこの順番で行う。
+        val candidates = List(CANDIDATES_PER_LEVEL) {
+            generateWithSolution(size.rows, size.cols, size.numPairs, random, eggChance(level))
         }
-        return scored.maxBy { it.second }.first
+        // 時間がかかるのは候補ごとの分析なので、そこだけ端末の複数のCPUで同時に進める。
+        // 分析は候補ごとに独立していて乱数も使わないので、並べても結果は変わらない。分析が1つ終わるたびに進捗を知らせる。
+        val done = AtomicInteger(0)
+        val traps = candidates.parallelStream()
+            .map { candidate ->
+                ParSolver.analyze(candidate.board, nodeBudget = ANALYSIS_NODE_BUDGET).traps.also {
+                    onProgress(done.incrementAndGet().toFloat() / CANDIDATES_PER_LEVEL)
+                }
+            }
+            .collect(Collectors.toList())
+        // 同点なら先に作った候補を選ぶ(並べる前と同じ選び方)。
+        return candidates.indices.maxBy { i -> if (traps[i] >= target) 1000 - (traps[i] - target) else traps[i] }.let { candidates[it] }
     }
 
     /** 生成した盤面と、それを必ず全消しできる撃ち順(発射元セルの列)。 */

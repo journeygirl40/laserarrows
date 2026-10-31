@@ -67,14 +67,12 @@ fun LevelListOverlay(
     sortDescending: Boolean,
     onToggleSort: () -> Unit,
     onSelectLevel: (Int) -> Unit,
-    onResetRatings: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val maxLv = clearedLevels.maxOrNull() ?: 0
     val upperBound = maxOf(maxLv + 1, 30)
     var excludePerfect by remember { mutableStateOf(initialExcludePerfect) }
-    var confirmingReset by remember { mutableStateOf(false) }
     // レベル一覧からの選択は必ず新規ランを開始する(newRun)ため、再開可能なランが残っていると気付かず上書きされてしまう。
     // そのため選択前に一度だけ確認を挟み、誤タップで進行中のランを失わないようにする。
     var confirmingLevel by remember { mutableStateOf<Int?>(null) }
@@ -199,24 +197,7 @@ fun LevelListOverlay(
                 }
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                GhostButton(
-                    text = if (confirmingReset) "本当にリセットする" else "🗑 評価をリセット",
-                    onClick = {
-                        if (confirmingReset) {
-                            onResetRatings()
-                            confirmingReset = false
-                        } else {
-                            confirmingReset = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                GhostButton("戻る", onClick = onBack, modifier = Modifier.weight(1f))
-            }
+            GhostButton("戻る", onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
 
         confirmingLevel?.let { lv ->
@@ -304,7 +285,7 @@ private fun LevelListItem(
                     color = if (isNext) Neon1Edge else if (cleared && !perfect) DangerColor else TextPrimary,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(R.drawable.icon_baby), contentDescription = null, modifier = Modifier.size(16.dp))
+                    Image(painterResource(R.drawable.icon_paw), contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("ベスト ${bestScore?.toString() ?: "―"}匹", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMuted)
                 }

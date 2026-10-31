@@ -55,13 +55,13 @@ fun BirthPopupView(at: CellPos, color: LaserColor, babies: Int, cellSizeDp: Dp, 
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(painterResource(R.drawable.icon_sparkling_heart), contentDescription = null, modifier = Modifier.size(cellSizeDp * 0.42f))
-            // 生まれた赤ちゃんの数だけ小さな顔を並べる(多すぎる時は数字で見せる)。
+            // 増えたなかまの小さな顔を並べ(多い時は4つまで)、その下に合計を数字で見せる。
             Row(modifier = Modifier.wrapContentWidth(unbounded = true), verticalAlignment = Alignment.CenterVertically) {
                 repeat(babies.coerceAtMost(4)) {
                     Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(babySize))
                 }
-                if (babies > 4) GameText("×$babies", fontSize = 13.sp, color = TextPrimary, singleLine = true)
             }
+            GameText("+$babies", fontSize = 16.sp, color = TextPrimary, singleLine = true)
         }
     }
 }

@@ -40,7 +40,7 @@ fun ScoreBonusPopupView(gained: Int, relays: Int = 0, modifier: Modifier = Modif
 
     Box(modifier = modifier) {
         GameText(
-            if (relays > 0) "+$gained 案内×$relays" else "+$gained",
+            "+$gained",
             fontSize = 14.sp,
             color = EmberColor,
             singleLine = true,

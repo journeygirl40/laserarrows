@@ -17,12 +17,15 @@ import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.engine.LaserSimulator
+import com.laserarrows.app.engine.ParResult
 import com.laserarrows.app.engine.ParSolver
 import com.laserarrows.app.engine.PuzzleGenerator
 import com.laserarrows.app.engine.ReplayEngine
 import com.laserarrows.app.engine.ScoreRules
 import com.laserarrows.app.engine.Tile
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,7 +64,9 @@ class GameViewModel(
                         levelStars = current.levelStars,
                         forestPopulation = current.forestPopulation,
                         forestStageSeen = current.forestStageSeen,
+                        forestExpansionSeen = current.forestExpansionSeen,
                         eggIntroSeen = current.eggIntroSeen,
+                        scoreHelpSeen = current.scoreHelpSeen,
                         importHistory = current.importHistory,
                     )
                 }
@@ -112,11 +117,21 @@ class GameViewModel(
             }
         }
         viewModelScope.launch {
+            progressStore.scoreHelpSeen.collect { seen ->
+                _uiState.update { it.copy(scoreHelpSeen = seen) }
+            }
+        }
+        viewModelScope.launch {
             progressStore.best.combine(progressStore.forestStageSeen) { best, seen -> best.score to seen }.collect { (score, seen) ->
                 val current = ForestStage.of(score).level
                 // この機能が入る前から遊んでいた人は、今の段階を「見届け済み」から始める(起動直後にいきなり祝わない)。
                 if (seen < 0) progressStore.saveForestStageSeen(current)
                 _uiState.update { it.copy(forestStageSeen = if (seen < 0) current else seen) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.forestExpansionSeen.collect { seen ->
+                _uiState.update { it.copy(forestExpansionSeen = seen) }
             }
         }
         viewModelScope.launch {
@@ -161,18 +176,67 @@ class GameViewModel(
         viewModelScope.launch { progressStore.saveLevelListSortDescending(descending) }
     }
 
+    /** プレイ画面の「?」から「なかまの増え方」の説明を開く。 */
+    fun openScoreHelp() = _uiState.update { it.copy(showScoreHelp = true) }
+
+    /** 「なかまの増え方」の説明を閉じる(以後は自動では出さない)。 */
+    fun dismissScoreHelp() {
+        _uiState.update { it.copy(showScoreHelp = false, scoreHelpSeen = true) }
+        viewModelScope.launch { progressStore.markScoreHelpSeen() }
+    }
+
     /** 「なぞのたまご」の説明を閉じる(以後は出さない)。 */
     fun dismissEggIntro() {
         _uiState.update { it.copy(showEggIntro = false, eggIntroSeen = true) }
         viewModelScope.launch { progressStore.markEggIntroSeen() }
     }
 
+    // ---- 次のレベルの先読み ----
+    // 遊んでいる間に次のレベルの盤面を裏で作っておき、「次のレベルへ」を押した時の待ち時間をなくす。
+    // 盤面は毎回新しく作るので、先読みした盤面は一度使ったら捨てる(同じ盤面には二度と出会わない)。
+
+    /** 作成中/作成済みの盤面1つ分。progress=作成の進み具合(待つことになった時の読み込みバー用)。 */
+    private class BoardPrefetch(val board: Deferred<Board>, val progress: MutableStateFlow<Float>)
+
+    private val boardPrefetches = mutableMapOf<Int, BoardPrefetch>()
+
+    /** クリア時点で先に計算しておく、次のレベルのパー。パーは開始時のコンボで変わるので、コンボも合わせて覚えておく。 */
+    private class ParPrefetch(val level: Int, val combo: Int, val par: Deferred<ParResult>)
+
+    private var parPrefetch: ParPrefetch? = null
+
+    /** そのレベルの盤面の作成を(まだなら)裏で始める。先読みは直近の数レベル分だけ残す。 */
+    private fun prefetchBoard(level: Int): BoardPrefetch {
+        boardPrefetches[level]?.let { return it }
+        val progress = MutableStateFlow(0f)
+        val board = viewModelScope.async(Dispatchers.Default) {
+            PuzzleGenerator.generateForLevel(level) { progress.value = it }.board
+        }
+        val prefetch = BoardPrefetch(board, progress)
+        boardPrefetches[level] = prefetch
+        boardPrefetches.keys.filter { it < level - 1 || it > level + 1 }.forEach { boardPrefetches.remove(it)?.board?.cancel() }
+        return prefetch
+    }
+
+    /** クリアした時に、次のレベルのパーを(次の盤面ができ次第)裏で計算し始める。 */
+    private fun prefetchNextPar(nextLevel: Int, combo: Int) {
+        val next = prefetchBoard(nextLevel)
+        parPrefetch?.par?.cancel()
+        parPrefetch = ParPrefetch(
+            nextLevel,
+            combo,
+            viewModelScope.async(Dispatchers.Default) { ParSolver.solve(next.board.await(), combo) },
+        )
+    }
+
     /** 今の盤面のパーを、レベル開始時点の盤面とコンボから計算し直す(インポート・再開・テストプレイ等、生成を経ない盤面用)。 */
-    private fun refreshPar() {
+    private fun refreshPar(precomputed: Deferred<ParResult>? = null) {
         val snapshot = _uiState.value.levelSnapshot ?: return
-        _uiState.update { it.copy(par = null) }
+        // 先に計算済みなら、「計算中」を挟まずにそのまま出す(終わっているDeferredのawaitは待たずに返る)。
+        if (precomputed?.isCompleted != true) _uiState.update { it.copy(par = null) }
         viewModelScope.launch {
-            val par = withContext(Dispatchers.Default) { ParSolver.solve(snapshot.board, snapshot.combo) }
+            val par = precomputed?.let { runCatching { it.await() }.getOrNull() }
+                ?: withContext(Dispatchers.Default) { ParSolver.solve(snapshot.board, snapshot.combo) }
             // 計算中に別の盤面へ移っていたら、古い盤面のパーで上書きしない。
             _uiState.update { if (it.levelSnapshot == snapshot) it.copy(par = par) else it }
         }
@@ -188,12 +252,6 @@ class GameViewModel(
     }
     fun listBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
 
-    /** レベル一覧の「パーフェクト/消費ライフ/レベルごとのベストスコア」評価を全レベル分リセットする(クリア済み記録・自己ベスト記録は変更しない)。 */
-    fun resetLevelRatings() {
-        viewModelScope.launch { progressStore.resetLevelRatings() }
-        _uiState.update { it.copy(levelBestLivesLost = emptyMap(), levelBestScore = emptyMap()) }
-        showToast("🗑 レベルの評価をリセットしました")
-    }
     fun goImport() = _uiState.update { it.copy(overlay = Overlay.Import) }
     fun importBack() = _uiState.update { it.copy(overlay = Overlay.Favorites) }
     fun goFavorites() = _uiState.update { it.copy(overlay = Overlay.Favorites) }
@@ -304,7 +362,9 @@ class GameViewModel(
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
+                forestExpansionSeen = it.forestExpansionSeen,
                 eggIntroSeen = it.eggIntroSeen,
+                scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
             )
         }
@@ -314,9 +374,18 @@ class GameViewModel(
     private fun startLevel(targetOverlay: Overlay = Overlay.None) {
         viewModelScope.launch {
             val level = _uiState.value.level
-            _uiState.update { it.copy(loadingProgress = 0f) }
-            val board = withContext(Dispatchers.Default) {
-                PuzzleGenerator.generateForLevel(level) { progress -> _uiState.update { it.copy(loadingProgress = progress) } }.board
+            // 先読み済みならすぐに盤面を出す。作成中なら、その続きを待つ(待つ間だけ読み込みバーを進める)。
+            val prefetch = prefetchBoard(level)
+            boardPrefetches.remove(level)
+            val board = if (prefetch.board.isCompleted) {
+                prefetch.board.await()
+            } else {
+                val watcher = launch { prefetch.progress.collect { p -> _uiState.update { it.copy(loadingProgress = p) } } }
+                try {
+                    prefetch.board.await()
+                } finally {
+                    watcher.cancel()
+                }
             }
             val remaining = board.tiles.values.count { it is Tile.Receiver }
             // 過去の最深到達レベルを超えた瞬間は「まだ誰も(自分すら)見たことのない領域」として一度だけ大きく祝う。
@@ -331,6 +400,8 @@ class GameViewModel(
                     loadingProgress = null,
                     // なぞのたまごが初めて盤面に出た時だけ、遊び方の説明を出す。
                     showEggIntro = !it.eggIntroSeen && board.tiles.values.any { tile -> tile is Tile.Shooter && tile.egg },
+                    // なかまの増え方は、最初のプレイで一度だけ説明する(たまごの説明と重なる時は、たまごを先に)。
+                    showScoreHelp = it.showScoreHelp || it.scoreHelpSeen == false,
                     overlay = targetOverlay,
                     clearFinale = null,
                     hasActiveRun = true,
@@ -345,7 +416,13 @@ class GameViewModel(
                 )
             }
             // 大きな盤面ではパーの探索に時間がかかるため、盤面は先に見せてパーは裏で計算する(HUDは計算中表示)。
-            refreshPar()
+            // クリア時に先に計算しておいたパーが、この盤面と開始コンボに合っていればそれを使う。
+            val startCombo = _uiState.value.combo
+            val precomputed = parPrefetch?.takeIf { it.level == level && it.combo == startCombo }?.par
+            parPrefetch = null
+            refreshPar(precomputed)
+            // 遊んでいる間に、次のレベルの盤面を裏で作っておく。
+            prefetchBoard(level + 1)
             if (enteringNewLevelRecord) {
                 progressStore.recordLevelReached(level)
             }
@@ -460,7 +537,9 @@ class GameViewModel(
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
+                forestExpansionSeen = it.forestExpansionSeen,
                 eggIntroSeen = it.eggIntroSeen,
+                scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
@@ -557,7 +636,9 @@ class GameViewModel(
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
+                forestExpansionSeen = it.forestExpansionSeen,
                 eggIntroSeen = it.eggIntroSeen,
+                scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
@@ -718,6 +799,13 @@ class GameViewModel(
         viewModelScope.launch { progressStore.saveForestStageSeen(level) }
     }
 
+    /** ホームで森の広さの段階が上がったのを見せた時に呼ぶ。 */
+    fun onForestExpansionCelebrated(level: Int) {
+        sfxEngine.playForestLevelUp()
+        _uiState.update { it.copy(forestExpansionSeen = level) }
+        viewModelScope.launch { progressStore.saveForestExpansionSeen(level) }
+    }
+
     // ---- クリア画面のパレード ----
     fun onParadePop(index: Int) = sfxEngine.playParadePop(index)
 
@@ -866,6 +954,8 @@ class GameViewModel(
             ?: 0
         val levelScore = current.levelScore
         val stars = ScoreRules.starsFor(levelScore, par)
+        // 「次のレベルへ」で使う盤面とパーを、クリア画面を見ている間に用意しておく(お気に入り・自作のテストには「次」が無い)。
+        if (!current.isImported) prefetchNextPar(current.level + 1, current.combo)
 
         if (!current.isImported) {
             val newBest = if (totalScore > current.bestScore) {
@@ -906,7 +996,15 @@ class GameViewModel(
         _uiState.update {
             it.copy(
                 score = totalScore,
-                overlay = Overlay.Clear(totalScore, livesLost, levelScore, par, stars, couples),
+                overlay = Overlay.Clear(
+                    totalScore,
+                    livesLost,
+                    levelScore,
+                    par,
+                    stars,
+                    couples,
+                    populationGain = if (current.isImported) 0 else levelScore,
+                ),
                 hasActiveRun = false,
                 clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,
             )
@@ -940,6 +1038,16 @@ class GameViewModel(
             )
         }
         showToast("📺 広告視聴でライフ全回復!続きから挑戦できます")
+    }
+
+    /** クリア画面から、広告視聴の報酬として今回森に加わった赤ちゃんをもう一度加える(=2倍)。1回のクリアにつき1度だけ。 */
+    fun doubleClearRewardWithAd() {
+        val overlay = _uiState.value.overlay as? Overlay.Clear ?: return
+        if (overlay.doubled || overlay.populationGain <= 0) return
+        _uiState.update { it.copy(overlay = overlay.copy(doubled = true)) }
+        viewModelScope.launch { progressStore.addForestPopulation(overlay.populationGain) }
+        sfxEngine.playHighScore()
+        showToast("📺 森のなかまが2倍に! +${overlay.populationGain * 2}匹")
     }
 
     /** リワード広告がまだ視聴できない状態だった場合に呼ぶ。 */

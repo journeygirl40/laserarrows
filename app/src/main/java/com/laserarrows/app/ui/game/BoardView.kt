@@ -132,7 +132,7 @@ private fun RunnerTile(tile: Tile.Shooter, sizeDp: Dp, shape: RoundedCornerShape
         face = color,
         edge = lerp(color, Color.Black, 0.28f),
         shape = shape,
-        edgeHeight = sizeDp * 0.07f,
+        edgeHeight = sizeDp * TILE_EDGE,
         onClick = onClick,
         modifier = Modifier.fillMaxSize().alpha(if (firing) 0.55f else 1f),
     ) {
@@ -220,7 +220,7 @@ private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerSha
         face = lerp(color, Color.White, 0.82f),
         edge = lerp(color, Color.Black, 0.1f),
         shape = shape,
-        edgeHeight = sizeDp * 0.07f,
+        edgeHeight = sizeDp * TILE_EDGE,
         borderColor = color,
         onClick = onClick,
         modifier = Modifier.fillMaxSize(),
@@ -243,12 +243,18 @@ private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerSha
     }
 }
 
-/** 何もないマス: 芝生に少しくぼんだ跡。仲間を呼ぶ時だけ金色に光って押せるようになる。 */
+/** 動物のマスの厚み(マスに対する比)。マスの面はこの分だけ上に浮いている。 */
+private const val TILE_EDGE = 0.07f
+
+/**
+ * 何もないマス: 芝生に少しくぼんだ跡。仲間を呼ぶ時だけ金色に光って押せるようになる。
+ * 動物のマスは厚みの分だけ面が上にあるので、くぼみも同じ高さに中心を合わせ、並んだ時に上下がずれて見えないようにする。
+ */
 @Composable
 private fun EmptyCell(sizeDp: Dp, shape: RoundedCornerShape, tappable: Boolean, onClick: () -> Unit) {
     var m = Modifier
         .fillMaxSize()
-        .padding(sizeDp * 0.08f)
+        .padding(start = sizeDp * 0.08f, end = sizeDp * 0.08f, top = sizeDp * 0.08f, bottom = sizeDp * (0.08f + TILE_EDGE))
         .background(if (tappable) Color.White.copy(alpha = 0.55f) else BoardGrassDark.copy(alpha = 0.7f), shape)
     if (tappable) m = m.border(1.5.dp, GoldColor.copy(alpha = 0.7f), shape).clickable(onClick = onClick)
     Box(modifier = m, contentAlignment = Alignment.Center) {

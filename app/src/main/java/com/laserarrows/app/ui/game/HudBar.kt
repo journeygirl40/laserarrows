@@ -8,6 +8,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +61,7 @@ fun HudBar(
     scoreBonusPopup: ScoreBonusPopup?,
     levelScore: Int,
     par: ParResult?,
+    onScoreHelp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -70,8 +74,8 @@ fun HudBar(
             )
             Box(modifier = Modifier.weight(1f)) {
                 HudBlock(
-                    label = "赤ちゃん",
-                    icon = R.drawable.icon_baby,
+                    label = "なかま",
+                    icon = R.drawable.icon_paw,
                     value = score.toString(),
                     valueColor = if (crossedHighScore) GoldColor else TextPrimary,
                 )
@@ -105,13 +109,13 @@ fun HudBar(
         Spacer(modifier = Modifier.height(6.dp))
         HighScoreProgressBar(score = score, bestScore = bestScore, crossedHighScore = crossedHighScore)
         Spacer(modifier = Modifier.height(4.dp))
-        LevelParRow(levelScore = levelScore, par = par)
+        LevelParRow(levelScore = levelScore, par = par, onHelp = onScoreHelp)
     }
 }
 
 /** このレベルで稼いだ点とパー(理論上の最高点)を並べ、今のままだと★いくつかを常に見せる。 */
 @Composable
-private fun LevelParRow(levelScore: Int, par: ParResult?) {
+private fun LevelParRow(levelScore: Int, par: ParResult?, onHelp: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -123,14 +127,30 @@ private fun LevelParRow(levelScore: Int, par: ParResult?) {
             else -> "目標 ${par.par}匹"
         }
         Text(
-            "このレベル 👶$levelScore / $parText",
+            "このレベル 🐾$levelScore / $parText",
             fontSize = 10.5.sp,
             fontWeight = FontWeight.Bold,
             color = TextMuted,
             maxLines = 1,
         )
-        if (par != null) {
-            StarRow(stars = ScoreRules.starsFor(levelScore, par.par), fontSize = 11.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (par != null) {
+                StarRow(stars = ScoreRules.starsFor(levelScore, par.par), fontSize = 11.sp)
+            }
+            // なかまの増え方の説明を開く「?」。小さくても押しやすいよう、見た目より広めに押せる範囲を取る。
+            Box(
+                modifier = Modifier
+                    .padding(start = 6.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onHelp)
+                    .padding(2.dp)
+                    .size(20.dp)
+                    .background(GoldColor.copy(alpha = 0.22f), CircleShape)
+                    .border(1.dp, GoldColor, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("?", fontSize = 12.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+            }
         }
     }
 }

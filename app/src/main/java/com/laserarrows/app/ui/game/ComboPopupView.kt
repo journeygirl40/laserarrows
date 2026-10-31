@@ -1,6 +1,10 @@
 package com.laserarrows.app.ui.game
 
 import com.laserarrows.app.ui.components.GameText
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
+import com.laserarrows.app.ui.theme.WoodDark
+import com.laserarrows.app.engine.ScoreRules
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -49,15 +53,16 @@ fun ComboPopupView(combo: Int, modifier: Modifier = Modifier) {
     }
 
     Box(modifier = modifier) {
-        GameText(
-            "${tier.label} ×$combo!",
-            fontSize = tier.fontSize,
-            color = tier.color,
-            singleLine = true,
+        // コンボがなかまの数にどう効いているかを、その場で数字で見せる(1回続くごとに+10%)。
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .scale(scale.value)
                 .alpha(alpha.value),
-        )
+        ) {
+            GameText("${tier.label} ×$combo!", fontSize = tier.fontSize, color = tier.color, singleLine = true)
+            GameText("なかま +${ScoreRules.comboBonusPercent(combo)}%", fontSize = 14.sp, color = Color.White, outline = WoodDark, singleLine = true)
+        }
     }
 }
 

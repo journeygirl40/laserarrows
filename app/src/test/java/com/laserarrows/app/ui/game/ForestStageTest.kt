@@ -26,4 +26,14 @@ class ForestStageTest {
         assertNull(ForestStage.next(ForestStage.stages.last()))
         assertEquals(1, ForestStage.next(ForestStage.stages.first())?.level)
     }
+
+    @Test
+    fun expansionStagesAreOrderedAndUsePopulation() {
+        ForestExpansion.stages.forEachIndexed { i, s -> assertEquals(i, s.level) }
+        ForestExpansion.stages.zipWithNext().forEach { (a, b) -> assertTrue(a.minScore < b.minScore) }
+        assertEquals(0, ForestExpansion.of(0).level)
+        assertEquals(1, ForestExpansion.of(30).level)
+        assertEquals(8, ForestExpansion.of(1_000_000).level)
+        assertNull(ForestExpansion.next(ForestExpansion.stages.last()))
+    }
 }

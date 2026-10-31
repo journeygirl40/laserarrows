@@ -81,7 +81,7 @@ private fun RecordBurst(
 fun HighScorePopupView(score: Int, modifier: Modifier = Modifier) {
     RecordBurst(
         mainText = "ハイスコア更新！",
-        subText = "赤ちゃん${score}匹 まだ増える！",
+        subText = "なかま${score}匹 まだ増える！",
         color = GoldColor,
         mainFontSize = 26.sp,
         holdMillis = 700,

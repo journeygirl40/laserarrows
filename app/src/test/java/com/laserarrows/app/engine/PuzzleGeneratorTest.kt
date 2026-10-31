@@ -88,8 +88,8 @@ class PuzzleGeneratorTest {
     @Test
     fun `同じシードなら同じ盤面が生成される`() {
         val size = PuzzleGenerator.levelSize(12)
-        val a = PuzzleGenerator.generate(size.rows, size.cols, size.numPairs, Random(PuzzleGenerator.seedForLevel(12)))
-        val b = PuzzleGenerator.generate(size.rows, size.cols, size.numPairs, Random(PuzzleGenerator.seedForLevel(12)))
+        val a = PuzzleGenerator.generate(size.rows, size.cols, size.numPairs, Random(12L))
+        val b = PuzzleGenerator.generate(size.rows, size.cols, size.numPairs, Random(12L))
         assertEquals(a, b)
     }
 
@@ -101,7 +101,7 @@ class PuzzleGeneratorTest {
             assertTrue("Lv.$level にたまごが出た", !hasEgg(PuzzleGenerator.generateForLevel(level).board))
         }
         val withEgg = (PuzzleGenerator.EGG_FIRST_LEVEL..PuzzleGenerator.EGG_FIRST_LEVEL + 19)
-            .count { hasEgg(PuzzleGenerator.generateForLevel(it).board) }
+            .count { hasEgg(PuzzleGenerator.generateForLevel(it, Random(it.toLong())).board) }
         assertTrue("Lv.11〜30でたまごが出たのは$withEgg レベルだけ", withEgg >= 10)
     }
 
@@ -118,6 +118,24 @@ class PuzzleGeneratorTest {
                 board = board.remove(origin).remove(hit!!)
             }
             assertTrue("seed=$seed: 受信が残った", board.tiles.isEmpty())
+        }
+    }
+
+    @Test
+    fun `同じレベルでも挑戦するたびに違う盤面になる`() {
+        for (level in listOf(1, 12, 27)) {
+            val boards = List(4) { PuzzleGenerator.generateForLevel(level).board }
+            assertTrue("Lv.$level で同じ盤面が続いた", boards.toSet().size > 1)
+        }
+    }
+
+    @Test
+    fun `同じ乱数からは同じ盤面になる(並列で分析しても選ばれる盤面は変わらない)`() {
+        for (level in listOf(1, 12, 27)) {
+            assertEquals(
+                PuzzleGenerator.generateForLevel(level, Random(level.toLong())).board,
+                PuzzleGenerator.generateForLevel(level, Random(level.toLong())).board,
+            )
         }
     }
 }

@@ -39,7 +39,9 @@ class ProgressStore(private val context: Context) {
     private val levelStarsKey = stringPreferencesKey("level_stars")
     private val forestPopulationKey = intPreferencesKey("forest_population")
     private val eggIntroSeenKey = booleanPreferencesKey("egg_intro_seen")
+    private val scoreHelpSeenKey = booleanPreferencesKey("score_help_seen")
     private val forestStageSeenKey = intPreferencesKey("forest_stage_seen")
+    private val forestExpansionSeenKey = intPreferencesKey("forest_expansion_seen")
     private val activeRunKey = stringPreferencesKey("active_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
     private val favoriteSortKeyKey = stringPreferencesKey("favorite_sort_key")
@@ -121,7 +123,7 @@ class ProgressStore(private val context: Context) {
         }
     }
 
-    /** レベルごとの最高★(1〜3)。★は進行の解放条件に使うため、評価リセットでは消さない。 */
+    /** レベルごとの最高★(1〜3)。★は進行の解放条件に使う。 */
     val levelStars: Flow<Map<Int, Int>> = context.progressDataStore.data.map { prefs ->
         decodeLevelIntMap(prefs[levelStarsKey])
     }
@@ -152,6 +154,13 @@ class ProgressStore(private val context: Context) {
         context.progressDataStore.edit { prefs -> prefs[forestStageSeenKey] = level }
     }
 
+    /** 森の広さの段階を、どこまで見届けたか(「森が広がった!」を一度だけ見せるため)。未記録は0(=はじまりの丘から)。 */
+    val forestExpansionSeen: Flow<Int> = context.progressDataStore.data.map { prefs -> prefs[forestExpansionSeenKey] ?: 0 }
+
+    suspend fun saveForestExpansionSeen(level: Int) {
+        context.progressDataStore.edit { prefs -> prefs[forestExpansionSeenKey] = level }
+    }
+
     /** 「なぞのたまご」の説明を一度見たか。 */
     val eggIntroSeen: Flow<Boolean> = context.progressDataStore.data.map { prefs -> prefs[eggIntroSeenKey] ?: false }
 
@@ -159,11 +168,11 @@ class ProgressStore(private val context: Context) {
         context.progressDataStore.edit { prefs -> prefs[eggIntroSeenKey] = true }
     }
 
-    suspend fun resetLevelRatings() {
-        context.progressDataStore.edit { prefs ->
-            prefs.remove(levelBestLivesLostKey)
-            prefs.remove(levelBestScoreKey)
-        }
+    /** 「なかまの増え方」の説明を一度見たか。 */
+    val scoreHelpSeen: Flow<Boolean> = context.progressDataStore.data.map { prefs -> prefs[scoreHelpSeenKey] ?: false }
+
+    suspend fun markScoreHelpSeen() {
+        context.progressDataStore.edit { prefs -> prefs[scoreHelpSeenKey] = true }
     }
 
     /** プレイ中のラン(盤面・ライフ・スコア等)を保存する。アプリのプロセスが落ちても「再開する」で復元できるようにするため。 */
