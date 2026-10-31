@@ -30,10 +30,10 @@ import androidx.compose.ui.unit.sp
 import com.laserarrows.app.engine.ReplayEngine
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
-import com.laserarrows.app.ui.theme.Bg1
-import com.laserarrows.app.ui.theme.Bg3
+import com.laserarrows.app.ui.theme.BoardGrass
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
+import com.laserarrows.app.ui.theme.GoldText
 import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
@@ -68,7 +68,7 @@ fun ReplayOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Bg1, Bg3))),
+            .background(Color.Transparent),
     ) {
         Column(
             modifier = Modifier
@@ -88,9 +88,9 @@ fun ReplayOverlay(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoChip("手 ${replay.stepIndex}/$totalSteps", Neon2)
-                InfoChip("スコア ${frame.score}", GoldColor)
-                if (frame.combo >= 2) InfoChip("コンボ ×${frame.combo}", GoldColor)
-                if (frame.lightAddedAt != null) InfoChip("💡 光を設置", GoldColor)
+                InfoChip("スコア ${frame.score}", GoldText)
+                if (frame.combo >= 2) InfoChip("コンボ ×${frame.combo}", GoldText)
+                if (frame.lightAddedAt != null) InfoChip("💡 光を設置", GoldText)
             }
 
             Box(
@@ -119,7 +119,7 @@ fun ReplayOverlay(
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .size(panelWidthDp, panelHeightDp)
-                                .background(Color(0x0EFFFFFF), RoundedCornerShape(22.dp))
+                                .background(BoardGrass, RoundedCornerShape(22.dp))
                                 .border(1.dp, GlassBorder, RoundedCornerShape(22.dp)),
                             contentAlignment = Alignment.Center,
                         ) {

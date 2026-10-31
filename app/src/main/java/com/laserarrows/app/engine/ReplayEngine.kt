@@ -92,7 +92,7 @@ object ReplayEngine {
                     if (hit == null) continue
                     val wasReceiver = board.tiles[hit] is Tile.Receiver
                     combo = if (wasReceiver) combo + 1 else 0
-                    score += if (wasReceiver) ScoreRules.shotScore(combo) else 0
+                    score += if (wasReceiver) ScoreRules.shotScore(combo, ScoreRules.relayCount(result)) else 0
                     board = board.remove(step.origin).remove(hit)
                 }
                 is Step.AddLight -> {

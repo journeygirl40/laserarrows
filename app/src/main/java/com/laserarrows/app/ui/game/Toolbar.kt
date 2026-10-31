@@ -1,28 +1,31 @@
 package com.laserarrows.app.ui.game
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.laserarrows.app.R
+import com.laserarrows.app.ui.components.ChunkySurface
+import com.laserarrows.app.ui.theme.CardEdge
 import com.laserarrows.app.ui.theme.DangerColor
-import com.laserarrows.app.ui.theme.GlassBorder
+import com.laserarrows.app.ui.theme.GlassFill
+import com.laserarrows.app.ui.theme.GlassHi
 import com.laserarrows.app.ui.theme.GoldColor
-import com.laserarrows.app.ui.theme.Neon2
-import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
 
 @Composable
@@ -39,7 +42,7 @@ fun Toolbar(
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ToolbarButton(
-            icon = "↺",
+            icon = R.drawable.icon_back,
             label = "戻す",
             cost = 1,
             enabled = undoEnabled,
@@ -47,7 +50,7 @@ fun Toolbar(
             modifier = Modifier.weight(1f),
         )
         ToolbarButton(
-            icon = "🔄",
+            icon = R.drawable.icon_undo,
             label = "やり直す",
             cost = 1,
             enabled = restartEnabled,
@@ -55,8 +58,8 @@ fun Toolbar(
             modifier = Modifier.weight(1f),
         )
         ToolbarButton(
-            icon = "➕",
-            label = "光源",
+            icon = R.drawable.icon_paw,
+            label = "呼ぶ",
             cost = 1,
             enabled = addLightEnabled,
             active = addLightActive,
@@ -64,7 +67,7 @@ fun Toolbar(
             modifier = Modifier.weight(1f),
         )
         ToolbarButton(
-            icon = "🔗",
+            icon = R.drawable.icon_link,
             label = "共有",
             cost = 0,
             enabled = true,
@@ -76,7 +79,7 @@ fun Toolbar(
 
 @Composable
 private fun ToolbarButton(
-    icon: String,
+    @DrawableRes icon: Int,
     label: String,
     cost: Int,
     enabled: Boolean,
@@ -84,30 +87,32 @@ private fun ToolbarButton(
     modifier: Modifier = Modifier,
     active: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(14.dp)
-    val accent = if (active) GoldColor else Neon2
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier
-            .heightIn(min = 64.dp)
-            .alpha(if (enabled) 1f else 0.35f)
-            .background(if (active) GoldColor.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f), shape)
-            .border(1.dp, if (active) GoldColor else GlassBorder, shape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+    ChunkySurface(
+        face = if (active) GoldColor else GlassFill,
+        edge = if (active) lerp(GoldColor, Color.Black, 0.25f) else CardEdge,
+        shape = RoundedCornerShape(18.dp),
+        edgeHeight = 4.dp,
+        borderColor = if (active) lerp(GoldColor, Color.White, 0.5f) else GlassHi,
+        enabled = enabled,
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 70.dp),
     ) {
-        Text(icon, fontSize = 18.sp, color = accent)
-        Text(
-            label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (active) GoldColor else TextPrimary,
-        )
-        if (cost > 0) {
-            Text("💔$cost", fontSize = 9.5.sp, color = DangerColor.copy(alpha = 0.85f))
-        } else {
-            Text(" ", fontSize = 9.5.sp, color = TextMuted)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+        ) {
+            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(26.dp))
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.Black, color = if (active) Color.White else TextPrimary)
+            // ライフを使う操作は、ハートのコストを小さく添える。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (cost > 0) {
+                    Image(painterResource(R.drawable.icon_life), contentDescription = null, modifier = Modifier.size(11.dp))
+                    Text("-$cost", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (active) Color.White else DangerColor)
+                } else {
+                    Text(" ", fontSize = 10.sp)
+                }
+            }
         }
     }
 }

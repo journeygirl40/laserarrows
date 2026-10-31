@@ -1,3 +1,6 @@
 <resources>
-    <style name="Theme.LaserArrows" parent="android:Theme.Material.NoActionBar" />
+    <!-- 起動直後(Compose描画前)に暗い画面が一瞬見えないよう、窓の背景も森の空色にしておく。 -->
+    <style name="Theme.LaserArrows" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
 </resources>

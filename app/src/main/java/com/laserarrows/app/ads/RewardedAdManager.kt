@@ -2,6 +2,8 @@ package com.laserarrows.app.ads
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -21,9 +23,14 @@ class RewardedAdManager(context: Context) {
     private var rewardedAd: RewardedAd? = null
     private var isLoading = false
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     init {
-        MobileAds.initialize(appContext)
-        loadAd()
+        // 初期化はメインスレッドで行うと起動が数百ミリ秒以上遅れるため、裏のスレッドで行う。
+        // 広告の読み込みはメインスレッドで呼ぶ必要があるので、初期化完了後にメインスレッドへ戻して始める。
+        Thread {
+            MobileAds.initialize(appContext) { mainHandler.post { loadAd() } }
+        }.start()
     }
 
     fun isReady(): Boolean = rewardedAd != null

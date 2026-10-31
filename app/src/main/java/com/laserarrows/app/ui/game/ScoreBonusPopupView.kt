@@ -1,5 +1,7 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.EmberColor
+import com.laserarrows.app.ui.components.GameText
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -22,7 +24,7 @@ import kotlinx.coroutines.delay
 
 /** そのショットで加算されたスコアを、スコア表示の上にふわっと出す(何点入ったか一目でわかるように)。 */
 @Composable
-fun ScoreBonusPopupView(gained: Int, modifier: Modifier = Modifier) {
+fun ScoreBonusPopupView(gained: Int, relays: Int = 0, modifier: Modifier = Modifier) {
     val scale = remember { Animatable(0.4f) }
     val alpha = remember { Animatable(1f) }
 
@@ -37,14 +39,11 @@ fun ScoreBonusPopupView(gained: Int, modifier: Modifier = Modifier) {
     }
 
     Box(modifier = modifier) {
-        Text(
-            "+$gained",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            color = GoldColor,
-            style = LocalTextStyle.current.copy(
-                shadow = Shadow(color = GoldColor.copy(alpha = 0.8f), blurRadius = 14f),
-            ),
+        GameText(
+            if (relays > 0) "+$gained 案内×$relays" else "+$gained",
+            fontSize = 14.sp,
+            color = EmberColor,
+            singleLine = true,
             modifier = Modifier
                 .scale(scale.value)
                 .alpha(alpha.value),

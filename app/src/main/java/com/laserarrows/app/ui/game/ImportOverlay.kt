@@ -33,8 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
-import com.laserarrows.app.ui.theme.Bg1
-import com.laserarrows.app.ui.theme.Bg3
 import com.laserarrows.app.ui.theme.Neon2
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
@@ -51,7 +49,7 @@ fun ImportOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Bg1, Bg3))),
+            .background(Color.Transparent),
     ) {
         Box(
             modifier = Modifier

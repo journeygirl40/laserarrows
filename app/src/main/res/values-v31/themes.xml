@@ -1,0 +1,9 @@
+<resources>
+    <!-- Android 12以降の起動画面: 空色の背景に、丸の中へ収まるよう調整したキツネとハートを出す。 -->
+    <style name="Theme.LaserArrows" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
+    </style>
+</resources>

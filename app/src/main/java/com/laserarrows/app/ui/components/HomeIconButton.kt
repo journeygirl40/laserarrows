@@ -1,29 +1,29 @@
 package com.laserarrows.app.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.laserarrows.app.R
+import com.laserarrows.app.ui.theme.CardEdge
+import com.laserarrows.app.ui.theme.GlassFill
 
 @Composable
 fun HomeIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    GlassSurface(
+    ChunkySurface(
+        face = GlassFill,
+        edge = CardEdge,
         shape = CircleShape,
-        modifier = modifier
-            .size(44.dp)
-            .clickable(onClick = onClick),
+        edgeHeight = 4.dp,
+        onClick = onClick,
+        modifier = modifier.size(50.dp),
     ) {
-        Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-            Text("⌂", fontSize = 19.sp)
-        }
+        Image(painterResource(R.drawable.icon_house), contentDescription = "ホーム", modifier = Modifier.size(28.dp))
     }
 }

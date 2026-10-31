@@ -29,7 +29,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +46,13 @@ import com.laserarrows.app.ui.components.GlassSurface
 import com.laserarrows.app.ui.components.HomeIconButton
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
+import com.laserarrows.app.ui.theme.BoardGrass
+import com.laserarrows.app.ui.theme.BoardGrassDark
+import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
+import com.laserarrows.app.ui.theme.TextPrimary
+import com.laserarrows.app.ui.theme.Wood
+import com.laserarrows.app.ui.theme.WoodDark
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -110,6 +119,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         when {
             uiState.overlay == Overlay.Home -> HomeOverlay(
                 bestScore = uiState.bestScore,
+                forestPopulation = uiState.forestPopulation,
+                totalStars = uiState.totalStars,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
                 activeLevel = uiState.level,
@@ -147,6 +158,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 clearedLevels = uiState.clearedLevels,
                 levelBestLivesLost = uiState.levelBestLivesLost,
                 levelBestScore = uiState.levelBestScore,
+                levelStars = uiState.levelStars,
                 hasActiveRun = uiState.hasActiveRun,
                 activeLevel = uiState.level,
                 initialExcludePerfect = uiState.levelListExcludePerfect,
@@ -205,20 +217,40 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             else -> GameplayContent(uiState, viewModel, context)
         }
 
+        if (uiState.showEggIntro && uiState.overlay == Overlay.None) {
+            EggIntroDialog(onClose = { viewModel.dismissEggIntro() })
+        }
+
+        // 盤面づくりが1秒以上かかった時だけ読み込みバーを出す(すぐ終わる時にチラつかせない)。
+        val loadingProgress = uiState.loadingProgress
+        var showLoading by remember { mutableStateOf(false) }
+        LaunchedEffect(loadingProgress != null) {
+            showLoading = false
+            if (loadingProgress != null) {
+                delay(1000)
+                showLoading = true
+            }
+        }
+        if (showLoading && loadingProgress != null) {
+            LoadingOverlay(progress = loadingProgress)
+        }
+
         uiState.toast?.let { toast ->
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .safeDrawingPadding()
                     .padding(top = 8.dp)
-                    .background(Color(0xE0140A20), RoundedCornerShape(20.dp))
-                    .border(1.dp, if (toast.isDanger) DangerColor else GoldColor, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 18.dp, vertical = 7.dp),
+                    .padding(horizontal = 16.dp)
+                    .shadow(8.dp, RoundedCornerShape(20.dp))
+                    .background(GlassFill, RoundedCornerShape(20.dp))
+                    .border(2.dp, if (toast.isDanger) DangerColor else GoldColor, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 18.dp, vertical = 9.dp),
             ) {
                 Text(
                     toast.text,
-                    color = if (toast.isDanger) DangerColor else GoldColor,
-                    fontSize = 12.sp,
+                    color = if (toast.isDanger) DangerColor else TextPrimary,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -256,6 +288,8 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 crossedHighScore = uiState.crossedHighScoreThisRun,
                 inLevelRecordTerritory = uiState.crossedLevelRecordThisRun,
                 scoreBonusPopup = uiState.scoreBonusPopup,
+                levelScore = uiState.levelScore,
+                par = uiState.par,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -292,12 +326,16 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 val cellSizePx = with(LocalDensity.current) { cellSizeDp.toPx() }
                 val gapPx = with(LocalDensity.current) { gapDp.toPx() }
 
+                // 盤面は木枠に囲まれた芝生の上に置く(手触りのある「おもちゃ箱」感で、作り込みの印象を出す)。
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(panelWidthDp, panelHeightDp)
-                        .background(Color(0x0EFFFFFF), RoundedCornerShape(22.dp))
-                        .border(1.dp, GlassBorder, RoundedCornerShape(22.dp)),
+                        .shadow(12.dp, RoundedCornerShape(24.dp), ambientColor = WoodDark, spotColor = WoodDark)
+                        .background(Brush.verticalGradient(listOf(lerp(Wood, Color.White, 0.18f), Wood)), RoundedCornerShape(24.dp))
+                        .border(2.5.dp, WoodDark, RoundedCornerShape(24.dp))
+                        .padding(5.dp)
+                        .background(Brush.verticalGradient(listOf(BoardGrass, BoardGrassDark)), RoundedCornerShape(19.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (hasBoard) {
@@ -328,6 +366,15 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                 onSettled = { viewModel.onShotSettled() },
                                 modifier = Modifier.size(boardWidthDp, boardHeightDp),
                             )
+                            uiState.scoreBonusPopup?.let { popup ->
+                                val at = popup.at
+                                val color = popup.color
+                                if (at != null && color != null) {
+                                    key(popup.token) {
+                                        BirthPopupView(at, color, popup.gained, cellSizeDp, gapDp)
+                                    }
+                                }
+                            }
                             if (uiState.overlay is Overlay.Clear) {
                                 ClearFinaleCanvas(
                                     finale = uiState.clearFinale,
@@ -368,10 +415,8 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
 
                     if (uiState.overlay != Overlay.None) {
                         GlassSurface(
-                            shape = RoundedCornerShape(22.dp),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xB80A0814), RoundedCornerShape(22.dp)),
+                            shape = RoundedCornerShape(19.dp),
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 when (val overlay = uiState.overlay) {
@@ -383,6 +428,9 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                     is Overlay.Clear -> ClearOverlay(
                                         totalScore = overlay.totalScore,
                                         livesLost = overlay.livesLost,
+                                        levelScore = overlay.levelScore,
+                                        par = overlay.par,
+                                        stars = overlay.stars,
                                         isEditorTest = uiState.isEditorTest,
                                         isImported = uiState.isImported,
                                         crossedHighScore = uiState.crossedHighScoreThisRun,
@@ -436,10 +484,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
             }
         }
 
-        GlassSurface(
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             Toolbar(
                 undoEnabled = uiState.history.isNotEmpty() && uiState.lives > 0,
                 restartEnabled = uiState.lives > 0,
@@ -456,7 +501,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                     }
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 },
-                modifier = Modifier.padding(8.dp),
+                modifier = Modifier.padding(horizontal = 2.dp),
             )
         }
     }

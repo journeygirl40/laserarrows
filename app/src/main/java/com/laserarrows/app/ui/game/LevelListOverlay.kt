@@ -1,5 +1,18 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.WoodDark
+import com.laserarrows.app.ui.theme.Neon1Edge
+import com.laserarrows.app.ui.components.GameText
+import com.laserarrows.app.ui.components.CreamCard
+import com.laserarrows.app.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,11 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.laserarrows.app.engine.PuzzleGenerator
-import com.laserarrows.app.engine.ScoreRules
 import com.laserarrows.app.ui.components.GhostButton
-import com.laserarrows.app.ui.theme.Bg1
-import com.laserarrows.app.ui.theme.Bg3
+import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
@@ -50,6 +60,7 @@ fun LevelListOverlay(
     clearedLevels: Set<Int>,
     levelBestLivesLost: Map<Int, Int>,
     levelBestScore: Map<Int, Int>,
+    levelStars: Map<Int, Int>,
     hasActiveRun: Boolean,
     activeLevel: Int,
     initialExcludePerfect: Boolean = false,
@@ -74,20 +85,17 @@ fun LevelListOverlay(
         }
         if (sortDescending) base.sortedDescending() else base
     }
-    // スコア・コンボはレベルをまたいで引き継がれる仕様なので、レベルNの理論上の最高得点は
-    // 「レベル1からノーミスで積み上げたコンボのままレベルNもノーミスだった場合の累積点」で計算する。
-    val cumulativeMaxScore = remember(upperBound) {
-        var pairs = 0
-        (1..upperBound).associateWith { lv ->
-            pairs += PuzzleGenerator.levelSize(lv).numPairs
-            ScoreRules.maxScoreForPairs(pairs)
-        }
+    // 5レベルごと(盤面サイズが同じ区間)を1つの星座としてまとめ、★を灯していく星図として見せる。
+    val constellations = remember(visibleLevels) {
+        val groups = linkedMapOf<Int, MutableList<Int>>()
+        visibleLevels.forEach { lv -> groups.getOrPut(constellationIndex(lv)) { mutableListOf() } += lv }
+        groups.toList()
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Bg1, Bg3))),
+            .background(Color.Transparent),
     ) {
         Box(
             modifier = Modifier
@@ -107,7 +115,11 @@ fun LevelListOverlay(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Column(horizontalAlignment = Alignment.Start) {
-                Text("🎢 レベル一覧", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(R.drawable.icon_scroll), contentDescription = null, modifier = Modifier.size(40.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    GameText("レベル一覧", fontSize = 28.sp, color = TextPrimary, textAlign = TextAlign.Start)
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "次の一手を選ぶたび、少しだけ未来が開いていく。",
@@ -160,22 +172,30 @@ fun LevelListOverlay(
                 modifier = Modifier.weight(1f).widthIn(max = 360.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(visibleLevels) { lv ->
-                    LevelListItem(
-                        level = lv,
-                        cleared = lv in clearedLevels,
-                        bestLivesLost = levelBestLivesLost[lv],
-                        bestScore = levelBestScore[lv],
-                        maxScore = cumulativeMaxScore[lv] ?: 0,
-                        isNext = lv == maxLv + 1,
-                        onClick = {
-                            if (hasActiveRun) {
-                                confirmingLevel = lv
-                            } else {
-                                onSelectLevel(lv)
-                            }
-                        },
-                    )
+                constellations.forEach { (index, levels) ->
+                    item(key = "constellation-$index") {
+                        ConstellationHeader(
+                            index = index,
+                            earnedStars = constellationLevels(index).sumOf { levelStars[it] ?: 0 },
+                        )
+                    }
+                    items(levels, key = { it }) { lv ->
+                        LevelListItem(
+                            level = lv,
+                            cleared = lv in clearedLevels,
+                            bestLivesLost = levelBestLivesLost[lv],
+                            bestScore = levelBestScore[lv],
+                            stars = levelStars[lv] ?: 0,
+                            isNext = lv == maxLv + 1,
+                            onClick = {
+                                if (hasActiveRun) {
+                                    confirmingLevel = lv
+                                } else {
+                                    onSelectLevel(lv)
+                                }
+                            },
+                        )
+                    }
                 }
             }
 
@@ -203,13 +223,13 @@ fun LevelListOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xCC0A0814)),
+                    .background(Color(0x993B2414)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
                     modifier = Modifier
                         .widthIn(max = 300.dp)
-                        .background(Bg3, RoundedCornerShape(20.dp))
+                        .background(GlassFill, RoundedCornerShape(20.dp))
                         .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -245,62 +265,105 @@ private fun LevelListItem(
     cleared: Boolean,
     bestLivesLost: Int?,
     bestScore: Int?,
-    maxScore: Int,
+    stars: Int,
     isNext: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    val borderColor = when {
-        isNext -> Neon2
-        cleared -> GoldColor
-        else -> GlassBorder
-    }
-    val fillBrush = when {
-        cleared && (bestLivesLost == null || bestLivesLost == 0) -> Brush.linearGradient(listOf(Neon1.copy(alpha = 0.24f), PurpleAccent.copy(alpha = 0.24f)))
-        cleared -> Brush.linearGradient(listOf(GoldColor.copy(alpha = 0.16f), DangerColor.copy(alpha = 0.12f)))
-        isNext -> Brush.linearGradient(listOf(Neon2.copy(alpha = 0.16f), Neon1.copy(alpha = 0.16f)))
-        else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.04f), Color.White.copy(alpha = 0.01f)))
-    }
-    val badge = when {
-        cleared && (bestLivesLost == null || bestLivesLost == 0) -> "✨ パーフェクト"
-        cleared -> "💔×$bestLivesLost"
-        isNext -> "➡️ 次の挑戦"
-        else -> "まだ未挑戦"
-    }
+    val perfect = cleared && (bestLivesLost == null || bestLivesLost == 0)
     val badgeColor = when {
-        cleared && bestLivesLost != null && bestLivesLost > 0 -> DangerColor
+        isNext -> Neon1
         cleared -> GoldColor
-        isNext -> Neon2
-        else -> TextMuted
+        else -> TextMuted.copy(alpha = 0.5f)
     }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(fillBrush, shape)
-            .border(1.dp, borderColor, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
+    CreamCard(modifier = Modifier.fillMaxWidth(), onClick = onClick, face = if (isNext) Color(0xFFF0FBE6) else GlassFill) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text("Lv.$level", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-                Text(
-                    if (cleared) "クリア済み" else if (isNext) "次のステージ" else "未挑戦",
-                    fontSize = 12.sp,
-                    color = TextMuted,
-                )
-                Text(
-                    "🏆 ${bestScore?.toString() ?: "―"} / ${maxScore}点",
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                )
+            // レベル番号の丸バッジ(クリア済みは金、次の挑戦は緑、未挑戦は灰)。
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .background(badgeColor, CircleShape)
+                    .border(2.5.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("$level", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.White)
             }
-            Text(badge, fontSize = 12.5.sp, color = badgeColor, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    when {
+                        isNext -> "次の挑戦！"
+                        perfect -> "パーフェクト"
+                        cleared -> "クリア(ライフ-$bestLivesLost)"
+                        else -> "まだ未挑戦"
+                    },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (isNext) Neon1Edge else if (cleared && !perfect) DangerColor else TextPrimary,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(R.drawable.icon_baby), contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("ベスト ${bestScore?.toString() ?: "―"}匹", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                repeat(3) { i ->
+                    val lit = i < stars
+                    Image(
+                        painterResource(R.drawable.icon_star),
+                        contentDescription = null,
+                        colorFilter = if (lit) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                        modifier = Modifier.size(26.dp).alpha(if (lit) 1f else 0.3f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val CONSTELLATION_NAMES = listOf(
+    "オリオン座", "カシオペヤ座", "はくちょう座", "こと座", "さそり座",
+    "わし座", "ペガスス座", "アンドロメダ座", "ふたご座", "しし座",
+    "おおぐま座", "いて座",
+)
+
+private fun constellationIndex(level: Int): Int = (level - 1) / 5
+
+private fun constellationLevels(index: Int): IntRange = (index * 5 + 1)..(index * 5 + 5)
+
+private fun constellationName(index: Int): String {
+    val base = CONSTELLATION_NAMES[index % CONSTELLATION_NAMES.size]
+    val lap = index / CONSTELLATION_NAMES.size
+    return if (lap == 0) base else "$base ${lap + 1}"
+}
+
+@Composable
+private fun ConstellationHeader(index: Int, earnedStars: Int) {
+    val levels = constellationLevels(index)
+    val maxStars = levels.count() * 3
+    val complete = earnedStars >= maxStars
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 2.dp)
+            .background(if (complete) GoldColor else WoodDark, RoundedCornerShape(999.dp))
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "✦ ${constellationName(index)}  Lv.${levels.first}–${levels.last}",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = Color.White,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.icon_star), contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("$earnedStars / $maxStars", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White)
         }
     }
 }

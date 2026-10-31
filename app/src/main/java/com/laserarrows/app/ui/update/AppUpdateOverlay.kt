@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.GlassSurface
 import com.laserarrows.app.ui.components.NeonButton
+import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
@@ -49,7 +50,7 @@ fun AppUpdateOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xB80A0814)),
+                    .background(Color(0x993B2414)),
                 contentAlignment = Alignment.Center,
             ) {
                 GlassSurface(shape = RoundedCornerShape(20.dp)) {
@@ -73,7 +74,7 @@ fun AppUpdateOverlay(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color(0xE0140A20), RoundedCornerShape(16.dp))
+                        .background(GlassFill, RoundedCornerShape(16.dp))
                         .border(1.dp, GoldColor, RoundedCornerShape(16.dp))
                         .clickable(onClick = onInstallClick)
                         .padding(horizontal = 18.dp, vertical = 14.dp),

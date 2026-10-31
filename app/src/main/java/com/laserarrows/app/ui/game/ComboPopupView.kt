@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.GameText
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -48,16 +49,11 @@ fun ComboPopupView(combo: Int, modifier: Modifier = Modifier) {
     }
 
     Box(modifier = modifier) {
-        Text(
+        GameText(
             "${tier.label} ×$combo!",
             fontSize = tier.fontSize,
-            fontWeight = FontWeight.Black,
             color = tier.color,
-            maxLines = 1,
-            softWrap = false,
-            style = LocalTextStyle.current.copy(
-                shadow = Shadow(color = tier.color.copy(alpha = 0.8f), blurRadius = 24f),
-            ),
+            singleLine = true,
             modifier = Modifier
                 .scale(scale.value)
                 .alpha(alpha.value),

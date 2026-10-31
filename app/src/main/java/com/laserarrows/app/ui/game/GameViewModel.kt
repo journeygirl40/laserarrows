@@ -17,6 +17,7 @@ import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.engine.LaserSimulator
+import com.laserarrows.app.engine.ParSolver
 import com.laserarrows.app.engine.PuzzleGenerator
 import com.laserarrows.app.engine.ReplayEngine
 import com.laserarrows.app.engine.ScoreRules
@@ -56,9 +57,13 @@ class GameViewModel(
                         clearedLevels = current.clearedLevels,
                         levelBestLivesLost = current.levelBestLivesLost,
                         levelBestScore = current.levelBestScore,
+                        levelStars = current.levelStars,
+                        forestPopulation = current.forestPopulation,
+                        eggIntroSeen = current.eggIntroSeen,
                         importHistory = current.importHistory,
                     )
                 }
+                refreshPar()
             }
             // プレイ中の盤面・ライフ・スコア等を都度保存し、アプリのプロセスが落ちても「再開する」で復元できるようにする。
             // 復元処理より前に監視を始めると、復元前の初期状態を保存して既存のデータを消してしまうため、必ず復元後に開始する。
@@ -92,6 +97,21 @@ class GameViewModel(
         viewModelScope.launch {
             progressStore.levelBestScore.collect { best ->
                 _uiState.update { it.copy(levelBestScore = best) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.levelStars.collect { stars ->
+                _uiState.update { it.copy(levelStars = stars) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.eggIntroSeen.collect { seen ->
+                _uiState.update { it.copy(eggIntroSeen = seen) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.forestPopulation.collect { population ->
+                _uiState.update { it.copy(forestPopulation = population) }
             }
         }
         viewModelScope.launch {
@@ -129,6 +149,23 @@ class GameViewModel(
     fun setLevelListSortDescending(descending: Boolean) {
         _uiState.update { it.copy(levelListSortDescending = descending) }
         viewModelScope.launch { progressStore.saveLevelListSortDescending(descending) }
+    }
+
+    /** 「なぞのたまご」の説明を閉じる(以後は出さない)。 */
+    fun dismissEggIntro() {
+        _uiState.update { it.copy(showEggIntro = false, eggIntroSeen = true) }
+        viewModelScope.launch { progressStore.markEggIntroSeen() }
+    }
+
+    /** 今の盤面のパーを、レベル開始時点の盤面とコンボから計算し直す(インポート・再開・テストプレイ等、生成を経ない盤面用)。 */
+    private fun refreshPar() {
+        val snapshot = _uiState.value.levelSnapshot ?: return
+        _uiState.update { it.copy(par = null) }
+        viewModelScope.launch {
+            val par = withContext(Dispatchers.Default) { ParSolver.solve(snapshot.board, snapshot.combo) }
+            // 計算中に別の盤面へ移っていたら、古い盤面のパーで上書きしない。
+            _uiState.update { if (it.levelSnapshot == snapshot) it.copy(par = par) else it }
+        }
     }
 
     private fun maxLevelReached(): Int = _uiState.value.clearedLevels.maxOrNull() ?: 0
@@ -207,6 +244,7 @@ class GameViewModel(
                 bestScoreAtRunStart = saved.bestScoreAtRunStart,
                 crossedHighScoreThisRun = saved.crossedHighScoreThisRun,
                 crossedLevelRecordThisRun = saved.crossedLevelRecordThisRun,
+                par = saved.par,
                 hasActiveRun = true,
                 isEditorTest = false,
                 savedRun = null,
@@ -220,6 +258,8 @@ class GameViewModel(
     fun resume() {
         if (!_uiState.value.hasActiveRun) return
         _uiState.update { it.copy(overlay = Overlay.None) }
+        // テストプレイ等で計算が中断されたままのランに戻った場合は、パーを計算し直す。
+        if (_uiState.value.par == null) refreshPar()
     }
     fun clearNext() {
         val current = _uiState.value
@@ -251,6 +291,9 @@ class GameViewModel(
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
+                levelStars = it.levelStars,
+                forestPopulation = it.forestPopulation,
+                eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
             )
         }
@@ -260,9 +303,9 @@ class GameViewModel(
     private fun startLevel(targetOverlay: Overlay = Overlay.None) {
         viewModelScope.launch {
             val level = _uiState.value.level
-            val size = PuzzleGenerator.levelSize(level)
+            _uiState.update { it.copy(loadingProgress = 0f) }
             val board = withContext(Dispatchers.Default) {
-                PuzzleGenerator.generate(size.rows, size.cols, size.numPairs)
+                PuzzleGenerator.generateForLevel(level) { progress -> _uiState.update { it.copy(loadingProgress = progress) } }.board
             }
             val remaining = board.tiles.values.count { it is Tile.Receiver }
             // 過去の最深到達レベルを超えた瞬間は「まだ誰も(自分すら)見たことのない領域」として一度だけ大きく祝う。
@@ -274,6 +317,9 @@ class GameViewModel(
                     busy = false,
                     history = emptyList(),
                     levelSnapshot = LevelSnapshot(board, it.lives, it.score, it.combo),
+                    loadingProgress = null,
+                    // なぞのたまごが初めて盤面に出た時だけ、遊び方の説明を出す。
+                    showEggIntro = !it.eggIntroSeen && board.tiles.values.any { tile -> tile is Tile.Shooter && tile.egg },
                     overlay = targetOverlay,
                     clearFinale = null,
                     hasActiveRun = true,
@@ -287,6 +333,8 @@ class GameViewModel(
                     },
                 )
             }
+            // 大きな盤面ではパーの探索に時間がかかるため、盤面は先に見せてパーは裏で計算する(HUDは計算中表示)。
+            refreshPar()
             if (enteringNewLevelRecord) {
                 progressStore.recordLevelReached(level)
             }
@@ -398,6 +446,9 @@ class GameViewModel(
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
+                levelStars = it.levelStars,
+                forestPopulation = it.forestPopulation,
+                eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
@@ -407,6 +458,7 @@ class GameViewModel(
                 activeFavoriteImportedAt = importedAt,
             )
         }
+        refreshPar()
         showToast("🔗 パズルをインポートしました")
     }
 
@@ -430,6 +482,7 @@ class GameViewModel(
         val newBoard = when (es.tool) {
             EditorTool.ERASER -> es.board.remove(pos)
             EditorTool.SHOOTER -> es.board.place(pos, Tile.Shooter(es.direction, es.color))
+            EditorTool.EGG -> es.board.place(pos, Tile.egg(es.direction))
             EditorTool.RECEIVER -> es.board.place(pos, Tile.Receiver(es.color))
         }
         _uiState.update { it.copy(editorState = it.editorState.copy(board = newBoard)) }
@@ -474,6 +527,7 @@ class GameViewModel(
                     bestScoreAtRunStart = it.bestScoreAtRunStart,
                     crossedHighScoreThisRun = it.crossedHighScoreThisRun,
                     crossedLevelRecordThisRun = it.crossedLevelRecordThisRun,
+                    par = it.par,
                 )
             } else {
                 it.savedRun
@@ -488,6 +542,9 @@ class GameViewModel(
                 clearedLevels = it.clearedLevels,
                 levelBestLivesLost = it.levelBestLivesLost,
                 levelBestScore = it.levelBestScore,
+                levelStars = it.levelStars,
+                forestPopulation = it.forestPopulation,
+                eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
                 board = board,
                 remainingReceivers = remaining,
@@ -499,6 +556,7 @@ class GameViewModel(
                 editorState = it.editorState,
             )
         }
+        refreshPar()
     }
 
     // ---- タップ操作 ----
@@ -517,7 +575,7 @@ class GameViewModel(
         }
         val tile = current.board.tiles[pos] ?: return
         if (tile is Tile.Receiver) {
-            showToast("光る球は受信専用。矢印から発射しよう")
+            showToast("💗の子は相手を待っています。矢印のついた子をタップしよう")
             return
         }
         val result = LaserSimulator.fireLaser(current.board, pos)
@@ -566,7 +624,8 @@ class GameViewModel(
             val wasReceiver = hitTile is Tile.Receiver
             // 矢印(Shooter)同士が同色でぶつかった場合は、見た目上はタイルが消えても「狙った接続」ではないため失敗扱いにする(コンボは繋げない・得点も与えない)。
             val newCombo = if (wasReceiver) current.combo + 1 else 0
-            val gained = if (wasReceiver) ScoreRules.shotScore(newCombo) else 0
+            val relays = ScoreRules.relayCount(shot.result)
+            val gained = if (wasReceiver) ScoreRules.shotScore(newCombo, relays) else 0
             val entry = HistoryEntry.Shot(
                 removedAPos = shot.originKey,
                 removedATile = originTile,
@@ -600,7 +659,7 @@ class GameViewModel(
                     busy = false,
                     activeShot = null,
                     comboPopup = if (wasReceiver && newCombo >= 2) ComboPopup(newCombo, token = System.nanoTime()) else null,
-                    scoreBonusPopup = if (wasReceiver && gained > 0) ScoreBonusPopup(gained, token = System.nanoTime()) else null,
+                    scoreBonusPopup = if (wasReceiver && gained > 0) ScoreBonusPopup(gained, relays, at = hitKey, color = hitTile.color, token = System.nanoTime()) else null,
                     crossedHighScoreThisRun = it.crossedHighScoreThisRun || justBeatHighScore,
                     highScorePopup = if (justBeatHighScore) {
                         HighScorePopup(newScore, token = System.nanoTime())
@@ -610,7 +669,7 @@ class GameViewModel(
                 )
             }
             if (!wasReceiver) {
-                showToast("⚡ 矢印同士がぶつかった(コンボが途切れました)", isDanger = true)
+                showToast("💥 同じ種類の走る子どうしがぶつかった(コンボが途切れました)", isDanger = true)
             }
             if (newRemaining <= 0) {
                 viewModelScope.launch {
@@ -624,7 +683,7 @@ class GameViewModel(
             _uiState.update {
                 it.copy(combo = 0, lives = newLives, busy = false, activeShot = null, comboPopup = null)
             }
-            showToast("✕ 最終的な色が一致しなかった", isDanger = true)
+            showToast("✕ 相手に出会えなかった", isDanger = true)
             if (newLives <= 0) {
                 viewModelScope.launch {
                     delay(500)
@@ -668,7 +727,7 @@ class GameViewModel(
                         comboPopup = null,
                     )
                 }
-                showToast("↺ 設置した光源を取り消しました(💔1)", isDanger = true)
+                showToast("↺ 呼んだなかまを帰しました(💔1)", isDanger = true)
             }
         }
         if (newLives <= 0) {
@@ -711,7 +770,7 @@ class GameViewModel(
         val newAdding = !current.addingLight
         _uiState.update { it.copy(addingLight = newAdding) }
         showToast(
-            if (newAdding) "💡 空いているマスをタップして光源を設置・ライフを1失います" else "キャンセルしました",
+            if (newAdding) "➕ 空いているマスをタップしてなかまを呼ぶ・ライフを1失います" else "キャンセルしました",
         )
     }
 
@@ -746,7 +805,7 @@ class GameViewModel(
             )
         }
         showToast(
-            if (foundConnection) "✨ 新しい光源を設置！繋がる向きが見つかりました" else "光源を設置しました(今すぐ繋がる向きは無いようです)",
+            if (foundConnection) "✨ なかまが来た！相手に出会える向きです" else "なかまが来ました(今すぐ出会える向きではないようです)",
             isDanger = !foundConnection,
         )
         if (_uiState.value.lives <= 0) {
@@ -767,6 +826,13 @@ class GameViewModel(
         val current = _uiState.value
         val totalScore = current.score
         val livesLost = ((current.levelSnapshot?.lives ?: current.lives) - current.lives).coerceAtLeast(0)
+        val snapshot = current.levelSnapshot
+        // パーの計算がまだ終わっていない(ごく短時間でクリアした)場合は、探索量を絞ってその場で求める。
+        val par = current.par?.par
+            ?: snapshot?.let { ParSolver.solve(it.board, it.combo, nodeBudget = 5_000).par }
+            ?: 0
+        val levelScore = current.levelScore
+        val stars = ScoreRules.starsFor(levelScore, par)
 
         if (!current.isImported) {
             val newBest = if (totalScore > current.bestScore) {
@@ -775,16 +841,21 @@ class GameViewModel(
                 BestRecord(current.bestLevel, current.bestScore)
             }
             val alreadyCleared = current.level in current.clearedLevels
+            val newLevelStars = current.levelStars + (current.level to maxOf(stars, current.levelStars[current.level] ?: 0))
             viewModelScope.launch {
                 progressStore.saveBest(newBest)
                 if (!alreadyCleared) progressStore.markLevelCleared(current.level)
                 progressStore.recordLevelClear(current.level, livesLost, totalScore)
+                progressStore.recordLevelStars(current.level, stars)
+                // 戻す(Undo)での稼ぎ直しを数えないよう、森のなかまはクリア確定時にまとめて加える。
+                progressStore.addForestPopulation(levelScore)
             }
             _uiState.update {
                 it.copy(
                     bestLevel = newBest.level,
                     bestScore = newBest.score,
                     clearedLevels = it.clearedLevels + current.level,
+                    levelStars = newLevelStars,
                 )
             }
         } else {
@@ -801,7 +872,7 @@ class GameViewModel(
         _uiState.update {
             it.copy(
                 score = totalScore,
-                overlay = Overlay.Clear(totalScore, livesLost),
+                overlay = Overlay.Clear(totalScore, livesLost, levelScore, par, stars),
                 hasActiveRun = false,
                 clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,
             )
@@ -906,7 +977,7 @@ class GameViewModel(
     }
 
     private fun encodeTile(tile: Tile): String = when (tile) {
-        is Tile.Shooter -> "SH:${tile.dir.name}:${tile.color.name}"
+        is Tile.Shooter -> "SH:${tile.dir.name}:${tile.color.name}" + if (tile.egg) ":EGG" else ""
         is Tile.Receiver -> "RC:${tile.color.name}"
     }
 
@@ -914,10 +985,10 @@ class GameViewModel(
         val parts = raw.split(":")
         return when (parts.getOrNull(0)) {
             "SH" -> {
-                if (parts.size != 3) return null
+                if (parts.size != 3 && parts.size != 4) return null
                 val dir = runCatching { Direction.valueOf(parts[1]) }.getOrNull() ?: return null
                 val color = runCatching { LaserColor.valueOf(parts[2]) }.getOrNull() ?: return null
-                Tile.Shooter(dir, color)
+                Tile.Shooter(dir, color, egg = parts.getOrNull(3) == "EGG")
             }
             "RC" -> {
                 if (parts.size != 2) return null

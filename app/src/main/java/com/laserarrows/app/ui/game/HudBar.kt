@@ -1,10 +1,12 @@
 package com.laserarrows.app.ui.game
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -27,11 +30,15 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.laserarrows.app.ui.components.GlassSurface
+import com.laserarrows.app.R
+import com.laserarrows.app.engine.ParResult
+import com.laserarrows.app.engine.ScoreRules
+import com.laserarrows.app.ui.components.CreamCard
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
@@ -49,6 +56,8 @@ fun HudBar(
     crossedHighScore: Boolean,
     inLevelRecordTerritory: Boolean,
     scoreBonusPopup: ScoreBonusPopup?,
+    levelScore: Int,
+    par: ParResult?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -61,7 +70,8 @@ fun HudBar(
             )
             Box(modifier = Modifier.weight(1f)) {
                 HudBlock(
-                    label = "SCORE",
+                    label = "赤ちゃん",
+                    icon = R.drawable.icon_baby,
                     value = score.toString(),
                     valueColor = if (crossedHighScore) GoldColor else TextPrimary,
                 )
@@ -69,6 +79,7 @@ fun HudBar(
                     key(popup.token) {
                         ScoreBonusPopupView(
                             gained = popup.gained,
+                            relays = popup.relays,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .offset(y = (-16).dp),
@@ -78,12 +89,14 @@ fun HudBar(
             }
             HudBlock(
                 label = "COMBO",
+                icon = R.drawable.icon_fire,
                 value = "×$combo",
                 valueColor = GoldColor,
                 modifier = Modifier.weight(1f),
             )
             HudBlock(
                 label = "LIFE",
+                icon = R.drawable.icon_life,
                 value = "×$lives",
                 valueColor = DangerColor,
                 modifier = Modifier.weight(1f),
@@ -91,6 +104,34 @@ fun HudBar(
         }
         Spacer(modifier = Modifier.height(6.dp))
         HighScoreProgressBar(score = score, bestScore = bestScore, crossedHighScore = crossedHighScore)
+        Spacer(modifier = Modifier.height(4.dp))
+        LevelParRow(levelScore = levelScore, par = par)
+    }
+}
+
+/** このレベルで稼いだ点とパー(理論上の最高点)を並べ、今のままだと★いくつかを常に見せる。 */
+@Composable
+private fun LevelParRow(levelScore: Int, par: ParResult?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val parText = when {
+            par == null -> "目標 計算中…"
+            par.approximate -> "目標 ≈${par.par}匹"
+            else -> "目標 ${par.par}匹"
+        }
+        Text(
+            "このレベル 👶$levelScore / $parText",
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMuted,
+            maxLines = 1,
+        )
+        if (par != null) {
+            StarRow(stars = ScoreRules.starsFor(levelScore, par.par), fontSize = 11.sp)
+        }
     }
 }
 
@@ -109,7 +150,7 @@ private fun HighScoreProgressBar(score: Int, bestScore: Int, crossedHighScore: B
         val caption = when {
             bestScore <= 0 -> "初めての記録に挑戦中！"
             crossedHighScore -> "🏆 ハイスコア更新中！ +${score - bestScore}"
-            else -> "ベストまであと ${(bestScore - score).coerceAtLeast(0)}点"
+            else -> "ベストまであと ${(bestScore - score).coerceAtLeast(0)}匹"
         }
         Text(
             caption,
@@ -148,18 +189,29 @@ private fun HighScoreProgressBar(score: Int, bestScore: Int, crossedHighScore: B
     }
 }
 
+/** 上部の数値札。アイコンがあれば3Dアイコン、無ければ小さな見出しを数字の上に置く。 */
 @Composable
-private fun HudBlock(label: String, value: String, modifier: Modifier = Modifier, valueColor: Color = TextPrimary) {
-    GlassSurface(modifier = modifier) {
+private fun HudBlock(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = TextPrimary,
+    @DrawableRes icon: Int? = null,
+) {
+    CreamCard(modifier = modifier, shape = RoundedCornerShape(16.dp), contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp).fillMaxWidth(),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(label, fontSize = 9.5.sp, color = TextMuted, letterSpacing = 1.sp, maxLines = 1)
+            if (icon != null) {
+                Image(painterResource(icon), contentDescription = label, modifier = Modifier.size(20.dp))
+            } else {
+                Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, color = TextMuted, letterSpacing = 1.sp, maxLines = 1, modifier = Modifier.height(20.dp))
+            }
             Text(
                 value,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
                 color = valueColor,
                 maxLines = 1,
                 softWrap = false,

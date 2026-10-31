@@ -36,6 +36,9 @@ class ProgressStore(private val context: Context) {
     private val importHistoryKey = stringPreferencesKey("import_history")
     private val levelBestLivesLostKey = stringPreferencesKey("level_best_lives_lost")
     private val levelBestScoreKey = stringPreferencesKey("level_best_score")
+    private val levelStarsKey = stringPreferencesKey("level_stars")
+    private val forestPopulationKey = intPreferencesKey("forest_population")
+    private val eggIntroSeenKey = booleanPreferencesKey("egg_intro_seen")
     private val activeRunKey = stringPreferencesKey("active_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
     private val favoriteSortKeyKey = stringPreferencesKey("favorite_sort_key")
@@ -115,6 +118,37 @@ class ProgressStore(private val context: Context) {
                 prefs[levelBestScoreKey] = encodeLevelIntMap(currentBestScore)
             }
         }
+    }
+
+    /** レベルごとの最高★(1〜3)。★は進行の解放条件に使うため、評価リセットでは消さない。 */
+    val levelStars: Flow<Map<Int, Int>> = context.progressDataStore.data.map { prefs ->
+        decodeLevelIntMap(prefs[levelStarsKey])
+    }
+
+    suspend fun recordLevelStars(level: Int, stars: Int) {
+        context.progressDataStore.edit { prefs ->
+            val current = decodeLevelIntMap(prefs[levelStarsKey]).toMutableMap()
+            val existing = current[level]
+            if (existing == null || stars > existing) {
+                current[level] = stars
+                prefs[levelStarsKey] = encodeLevelIntMap(current)
+            }
+        }
+    }
+
+    /** これまでに生まれた赤ちゃんの累計(=森のなかまの数)。減ることはない。 */
+    val forestPopulation: Flow<Int> = context.progressDataStore.data.map { prefs -> prefs[forestPopulationKey] ?: 0 }
+
+    suspend fun addForestPopulation(babies: Int) {
+        if (babies <= 0) return
+        context.progressDataStore.edit { prefs -> prefs[forestPopulationKey] = (prefs[forestPopulationKey] ?: 0) + babies }
+    }
+
+    /** 「なぞのたまご」の説明を一度見たか。 */
+    val eggIntroSeen: Flow<Boolean> = context.progressDataStore.data.map { prefs -> prefs[eggIntroSeenKey] ?: false }
+
+    suspend fun markEggIntroSeen() {
+        context.progressDataStore.edit { prefs -> prefs[eggIntroSeenKey] = true }
     }
 
     suspend fun resetLevelRatings() {

@@ -1,5 +1,8 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.BoardGrass
+import com.laserarrows.app.ui.theme.CardEdge
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,8 +47,7 @@ import com.laserarrows.app.engine.BoardCode
 import com.laserarrows.app.engine.PuzzleGenerator
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
-import com.laserarrows.app.ui.theme.Bg1
-import com.laserarrows.app.ui.theme.Bg3
+import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
@@ -81,7 +83,7 @@ fun FavoritesOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Bg1, Bg3))),
+            .background(Color.Transparent),
     ) {
         Box(
             modifier = Modifier
@@ -206,13 +208,13 @@ fun FavoritesOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xCC0A0814)),
+                    .background(Color(0x993B2414)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
                     modifier = Modifier
                         .widthIn(max = 300.dp)
-                        .background(Bg3, RoundedCornerShape(20.dp))
+                        .background(GlassFill, RoundedCornerShape(20.dp))
                         .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -326,11 +328,9 @@ private fun FavoriteItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.linearGradient(listOf(GoldColor.copy(alpha = 0.14f), PurpleAccent.copy(alpha = 0.12f))),
-                shape,
-            )
-            .border(1.dp, GoldColor.copy(alpha = 0.4f), shape)
+            .shadow(5.dp, shape, ambientColor = CardEdge, spotColor = CardEdge)
+            .background(GlassFill, shape)
+            .border(1.5.dp, GlassBorder, shape)
             .then(if (editingMemo) Modifier else Modifier.clickable(onClick = onClick))
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
@@ -345,7 +345,7 @@ private fun FavoriteItem(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .background(Color.Black.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+                        .background(BoardGrass, RoundedCornerShape(10.dp))
                         .padding(5.dp),
                 ) {
                     if (board != null) {

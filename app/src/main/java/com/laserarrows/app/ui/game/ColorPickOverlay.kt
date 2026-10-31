@@ -1,5 +1,8 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.animalRes
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,9 +44,9 @@ fun ColorPickOverlay(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("光源の色を選択", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+        Text("呼ぶなかまを選択", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
         Text(
-            "この位置に設置する光源の色を選んでください",
+            "このマスに呼ぶ動物を選んでください",
             fontSize = 12.5.sp,
             color = TextMuted,
             textAlign = TextAlign.Center,
@@ -55,12 +58,15 @@ fun ColorPickOverlay(
             choices.forEach { color ->
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(52.dp)
                         .clip(CircleShape)
-                        .background(color.toComposeColor())
-                        .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                        .background(color.toComposeColor().copy(alpha = 0.25f))
+                        .border(2.dp, color.toComposeColor(), CircleShape)
                         .clickable { onPick(color) },
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(38.dp))
+                }
             }
         }
         GhostButton("キャンセル", onClick = onCancel)

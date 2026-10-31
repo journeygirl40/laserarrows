@@ -1,0 +1,6 @@
+<resources>
+    <!-- 起動画面の背景(ゲーム内の空と地平線の間の、明るい若草がかった空色)。 -->
+    <color name="splash_background">#FFCDEEF5</color>
+    <!-- 起動画面のアイコンの丸(クリーム色の札)。 -->
+    <color name="splash_icon_background">#FFFFF8EC</color>
+</resources>

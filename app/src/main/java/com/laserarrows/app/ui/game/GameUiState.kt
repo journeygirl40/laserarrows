@@ -7,6 +7,7 @@ import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.engine.LaserResult
+import com.laserarrows.app.engine.ParResult
 import com.laserarrows.app.engine.Tile
 
 sealed class HistoryEntry {
@@ -46,6 +47,7 @@ data class SavedRun(
     val bestScoreAtRunStart: Int,
     val crossedHighScoreThisRun: Boolean,
     val crossedLevelRecordThisRun: Boolean,
+    val par: ParResult?,
 )
 
 data class ShotAnimation(
@@ -68,7 +70,7 @@ data class ToastMessage(val text: String, val isDanger: Boolean = false, val tok
 data class ComboPopup(val combo: Int, val token: Long = 0L)
 
 /** そのアクションで加算されたスコアを、スコアの上に一時的に表示する演出。 */
-data class ScoreBonusPopup(val gained: Int, val token: Long = 0L)
+data class ScoreBonusPopup(val gained: Int, val relays: Int = 0, val at: CellPos? = null, val color: LaserColor? = null, val token: Long = 0L)
 
 /** プレイ中にハイスコアを初めて上回った瞬間に一度だけ発火する演出。 */
 data class HighScorePopup(val score: Int, val token: Long = 0L)
@@ -76,7 +78,7 @@ data class HighScorePopup(val score: Int, val token: Long = 0L)
 /** プレイ中、これまでの最深到達レベルを初めて超えた瞬間に一度だけ発火する演出。 */
 data class LevelRecordPopup(val level: Int, val token: Long = 0L)
 
-enum class EditorTool { ERASER, SHOOTER, RECEIVER }
+enum class EditorTool { ERASER, SHOOTER, RECEIVER, EGG }
 
 data class EditorState(
     val board: Board = Board(6, 6),
@@ -115,6 +117,18 @@ data class GameUiState(
     val clearedLevels: Set<Int> = emptySet(),
     val levelBestLivesLost: Map<Int, Int> = emptyMap(),
     val levelBestScore: Map<Int, Int> = emptyMap(),
+    /** レベルごとの最高★(1〜3)。 */
+    val levelStars: Map<Int, Int> = emptyMap(),
+    /** これまでに生まれた赤ちゃんの累計(森のなかまの数)。 */
+    val forestPopulation: Int = 0,
+    /** 「なぞのたまご」の説明を見たことがあるか。 */
+    val eggIntroSeen: Boolean = false,
+    /** 「なぞのたまご」の説明を今表示しているか(初めてたまごが出た盤面で一度だけ)。 */
+    val showEggIntro: Boolean = false,
+    /** 盤面を作っている最中の進捗(0〜1)。作っていない時はnull。1秒以上かかる時だけ読み込みバーを出す。 */
+    val loadingProgress: Float? = null,
+    /** 今の盤面のパー(レベル開始時点のコンボから取れる理論上の最高点)。計算中はnull。 */
+    val par: ParResult? = null,
     val importHistory: List<ImportHistoryEntry> = emptyList(),
     val hasActiveRun: Boolean = false,
     /** レベル一覧を開いた時点で「パーフェクトを除外」フィルタを最初からONにするか(ホームの未パーフェクト件数バッジから遷移した場合)。 */
@@ -129,4 +143,9 @@ data class GameUiState(
     /** テストプレイに入る前の本来のラン。テストを抜けたタイミングで復元する。 */
     val savedRun: SavedRun? = null,
     val editorState: EditorState = EditorState(),
-)
+) {
+    val totalStars: Int get() = levelStars.values.sum()
+
+    /** このレベルに入ってから稼いだ点(★判定に使う)。 */
+    val levelScore: Int get() = score - (levelSnapshot?.score ?: 0)
+}

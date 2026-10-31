@@ -7,6 +7,7 @@ package com.laserarrows.app.engine
 object BoardCode {
     private const val PREFIX = "LAZ1"
     private const val MAX_SIZE = 40
+    private const val EGG_CHAR = '?'
 
     private fun colorChar(c: LaserColor): Char = when (c) {
         LaserColor.RED -> 'R'
@@ -37,7 +38,8 @@ object BoardCode {
                 when (val tile = board.tiles[CellPos(r, c)]) {
                     is Tile.Shooter -> {
                         sb.append(tile.dir.name[0])
-                        sb.append(colorChar(tile.color))
+                        // なぞのたまごは種類を持たないので「?」で表す(旧バージョンのコードには出てこない文字)。
+                        sb.append(if (tile.egg) EGG_CHAR else colorChar(tile.color))
                     }
                     is Tile.Receiver -> {
                         sb.append('o')
@@ -78,8 +80,8 @@ object BoardCode {
                     }
                     else -> {
                         val dir = charToDir(a) ?: return null
-                        val color = charToColor(b) ?: return null
-                        board = board.place(CellPos(r, c), Tile.Shooter(dir, color))
+                        val tile = if (b == EGG_CHAR) Tile.egg(dir) else Tile.Shooter(dir, charToColor(b) ?: return null)
+                        board = board.place(CellPos(r, c), tile)
                     }
                 }
             }

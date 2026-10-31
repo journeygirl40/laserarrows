@@ -1,5 +1,9 @@
 package com.laserarrows.app.ui.game
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import com.laserarrows.app.ui.components.GameText
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -55,24 +59,18 @@ private fun RecordBurst(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.scale(scale.value).alpha(alpha.value),
     ) {
-        Text(
-            mainText,
-            fontSize = mainFontSize,
-            fontWeight = FontWeight.Black,
-            color = color,
-            textAlign = TextAlign.Center,
-            style = LocalTextStyle.current.copy(
-                shadow = Shadow(color = color.copy(alpha = 0.85f), blurRadius = 26f),
-            ),
-        )
+        GameText(mainText, fontSize = mainFontSize, color = color)
         if (subText != null) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 subText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = color,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
                 textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .background(color, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
             )
         }
     }
@@ -82,8 +80,8 @@ private fun RecordBurst(
 @Composable
 fun HighScorePopupView(score: Int, modifier: Modifier = Modifier) {
     RecordBurst(
-        mainText = "🏆 ハイスコア更新！",
-        subText = "${score}点 まだ伸びる！",
+        mainText = "ハイスコア更新！",
+        subText = "赤ちゃん${score}匹 まだ増える！",
         color = GoldColor,
         mainFontSize = 26.sp,
         holdMillis = 700,
@@ -95,7 +93,7 @@ fun HighScorePopupView(score: Int, modifier: Modifier = Modifier) {
 @Composable
 fun LevelRecordPopupView(level: Int, modifier: Modifier = Modifier) {
     RecordBurst(
-        mainText = "🚀 未踏エリア突入",
+        mainText = "未踏エリア突入！",
         subText = "Lv.$level 自己記録更新中",
         color = Neon2,
         mainFontSize = 24.sp,

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
@@ -20,6 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.ktx.AppUpdateResult
 import com.google.android.play.core.ktx.requestUpdateFlow
+import com.laserarrows.app.ui.components.ForestBackground
 import com.laserarrows.app.ui.game.GameScreen
 import com.laserarrows.app.ui.theme.Bg1
 import com.laserarrows.app.ui.theme.LaserArrowsTheme
@@ -35,7 +37,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // 明るい森の背景なので、ステータスバー・ナビゲーションバーのアイコンは濃い色にする。
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
 
         val appUpdateManager = AppUpdateManagerFactory.create(this)
         updateResultLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { }
@@ -66,6 +72,7 @@ class MainActivity : ComponentActivity() {
             LaserArrowsTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Bg1) {
                     Box(modifier = Modifier.fillMaxSize()) {
+                        ForestBackground(modifier = Modifier.fillMaxSize())
                         GameScreen()
                         AppUpdateOverlay(
                             state = updateUiState,

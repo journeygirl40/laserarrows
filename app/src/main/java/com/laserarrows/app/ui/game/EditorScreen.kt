@@ -1,5 +1,8 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.animalRes
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,8 +35,7 @@ import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.GlassSurface
 import com.laserarrows.app.ui.components.HomeIconButton
 import com.laserarrows.app.ui.components.NeonButton
-import com.laserarrows.app.ui.theme.Bg1
-import com.laserarrows.app.ui.theme.Bg3
+import com.laserarrows.app.ui.theme.BoardGrass
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.TextMuted
@@ -60,7 +62,7 @@ fun EditorScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Bg1, Bg3)))
+            .background(Color.Transparent)
             .safeDrawingPadding()
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -98,30 +100,37 @@ fun EditorScreen(
                         modifier = Modifier.weight(1f),
                     )
                     ToolChip(
-                        "↗ 矢印",
+                        "🏃 走る子",
                         selected = editorState.tool == EditorTool.SHOOTER,
                         onClick = { onSelectTool(EditorTool.SHOOTER) },
                         modifier = Modifier.weight(1f),
                     )
                     ToolChip(
-                        "🔵 光る球",
+                        "💗 待つ子",
                         selected = editorState.tool == EditorTool.RECEIVER,
                         onClick = { onSelectTool(EditorTool.RECEIVER) },
                         modifier = Modifier.weight(1f),
                     )
+                    ToolChip(
+                        "🥚 たまご",
+                        selected = editorState.tool == EditorTool.EGG,
+                        onClick = { onSelectTool(EditorTool.EGG) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                if (editorState.tool != EditorTool.ERASER) {
+                // たまごは種類を持たないので、動物選びは出さない。
+                if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.RECEIVER) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         LaserColor.entries.forEach { c ->
                             ColorSwatch(
-                                color = c.toComposeColor(),
+                                color = c,
                                 selected = editorState.color == c,
                                 onClick = { onSelectColor(c) },
                             )
                         }
                     }
                 }
-                if (editorState.tool == EditorTool.SHOOTER) {
+                if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.EGG) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Direction.entries.forEach { d ->
                             DirChip(
@@ -154,7 +163,7 @@ fun EditorScreen(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(boardWidthDp + marginDp * 2, boardHeightDp + marginDp * 2)
-                        .background(Color(0x0EFFFFFF), RoundedCornerShape(22.dp))
+                        .background(BoardGrass, RoundedCornerShape(22.dp))
                         .border(1.dp, GlassBorder, RoundedCornerShape(22.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -219,15 +228,18 @@ private fun ToolChip(text: String, selected: Boolean, onClick: () -> Unit, modif
 }
 
 @Composable
-private fun ColorSwatch(color: Color, selected: Boolean, onClick: () -> Unit) {
+private fun ColorSwatch(color: LaserColor, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(30.dp)
+            .size(40.dp)
             .clip(CircleShape)
-            .background(color)
-            .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = 0.3f), CircleShape)
+            .background(color.toComposeColor().copy(alpha = if (selected) 0.55f else 0.2f))
+            .border(if (selected) 3.dp else 1.5.dp, if (selected) color.toComposeColor() else GlassBorder, CircleShape)
             .clickable(onClick = onClick),
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(28.dp))
+    }
 }
 
 @Composable

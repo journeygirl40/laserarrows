@@ -12,9 +12,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.laserarrows.app.engine.CellPos
+import com.laserarrows.app.ui.theme.EggTrail
 import com.laserarrows.app.ui.theme.toComposeColor
 import kotlin.math.cos
 import kotlin.math.floor
@@ -116,17 +118,19 @@ fun BeamCanvas(
         val frac = g - fullSegs
         val stillGrowing = g < maxSeg.toFloat()
 
+        // 明るい芝生の上でも映えるよう、白い縁取りの上に動物の色のリボンを重ね、中央に足あとのような白い点線を走らせる。
+        val footprints = PathEffect.dashPathEffect(floatArrayOf(4f * scaleFactor, 9f * scaleFactor), 0f)
         fun drawBeamSegment(p1: Offset, p2: Offset, hex: Color) {
-            drawLine(color = hex.copy(alpha = 0.22f), start = p1, end = p2, strokeWidth = 30f * scaleFactor, cap = StrokeCap.Round)
-            drawLine(color = hex.copy(alpha = 0.55f), start = p1, end = p2, strokeWidth = 16f * scaleFactor, cap = StrokeCap.Round)
-            drawLine(color = Color.White.copy(alpha = 0.95f), start = p1, end = p2, strokeWidth = 5f * scaleFactor, cap = StrokeCap.Round)
-            drawLine(color = Color.White, start = p1, end = p2, strokeWidth = 2.2f * scaleFactor, cap = StrokeCap.Round)
+            drawLine(color = hex.copy(alpha = 0.25f), start = p1, end = p2, strokeWidth = 26f * scaleFactor, cap = StrokeCap.Round)
+            drawLine(color = Color.White, start = p1, end = p2, strokeWidth = 15f * scaleFactor, cap = StrokeCap.Round)
+            drawLine(color = hex, start = p1, end = p2, strokeWidth = 10f * scaleFactor, cap = StrokeCap.Round)
+            drawLine(color = Color.White.copy(alpha = 0.9f), start = p1, end = p2, strokeWidth = 3.4f * scaleFactor, cap = StrokeCap.Round, pathEffect = footprints)
         }
 
         for (i in 0 until fullSegs) {
             val p1 = cellCenter(path[i])
             val p2 = cellCenter(path[i + 1])
-            val hex = colorTrail.getOrNull(i)?.toComposeColor() ?: Color.White
+            val hex = colorTrail.getOrNull(i)?.toComposeColor() ?: EggTrail
             drawBeamSegment(p1, p2, hex)
         }
 
@@ -135,7 +139,7 @@ fun BeamCanvas(
             val p1 = cellCenter(path[fullSegs])
             val p2 = cellCenter(path[fullSegs + 1])
             val tip = Offset(p1.x + (p2.x - p1.x) * frac, p1.y + (p2.y - p1.y) * frac)
-            val hex = colorTrail.getOrNull(fullSegs)?.toComposeColor() ?: Color.White
+            val hex = colorTrail.getOrNull(fullSegs)?.toComposeColor() ?: EggTrail
             drawBeamSegment(p1, tip, hex)
             tipPos = tip
         } else if (fullSegs == maxSeg) {
@@ -144,7 +148,7 @@ fun BeamCanvas(
 
         for (i in 0..fullSegs) {
             if (path[i] in s.bends) {
-                val bendColor = colorTrail.getOrNull((i - 1).coerceAtLeast(0))?.toComposeColor() ?: Color.White
+                val bendColor = colorTrail.getOrNull((i - 1).coerceAtLeast(0))?.toComposeColor() ?: EggTrail
                 val center = cellCenter(path[i])
                 drawCircle(color = bendColor.copy(alpha = 0.32f), radius = 12f * scaleFactor, center = center)
                 drawCircle(color = bendColor.copy(alpha = 0.6f), radius = 7.5f * scaleFactor, center = center)
@@ -153,7 +157,7 @@ fun BeamCanvas(
         }
 
         if (stillGrowing && tipPos != null) {
-            val headColor = colorTrail.getOrNull(fullSegs)?.toComposeColor() ?: Color.White
+            val headColor = colorTrail.getOrNull(fullSegs)?.toComposeColor() ?: EggTrail
             drawCircle(color = headColor.copy(alpha = 0.28f), radius = 17f * scaleFactor, center = tipPos)
             drawCircle(color = headColor.copy(alpha = 0.85f), radius = 9f * scaleFactor, center = tipPos)
             drawCircle(color = Color.White, radius = 4f * scaleFactor, center = tipPos)
@@ -183,7 +187,7 @@ fun BeamCanvas(
         val mf = muzzleFlash.value
         if (mf < 1f) {
             val originPos = cellCenter(path[0])
-            val originColor = colorTrail.getOrNull(0)?.toComposeColor() ?: Color.White
+            val originColor = colorTrail.getOrNull(0)?.toComposeColor() ?: EggTrail
             drawCircle(
                 color = originColor.copy(alpha = (1f - mf) * 0.35f),
                 radius = (14f + mf * 36f) * scaleFactor,
@@ -204,7 +208,7 @@ fun BeamCanvas(
         val sw = shockwave.value
         if (sw < 1f) {
             val originPos = cellCenter(path[0])
-            val originColor = colorTrail.getOrNull(0)?.toComposeColor() ?: Color.White
+            val originColor = colorTrail.getOrNull(0)?.toComposeColor() ?: EggTrail
             drawCircle(
                 color = originColor.copy(alpha = (1f - sw) * 0.55f),
                 radius = (10f + sw * 46f) * scaleFactor,
@@ -232,7 +236,7 @@ fun BeamCanvas(
             val p = cellCenter(hitPos)
             val t = burstProgress.value
             val fp = flarePulse.value
-            val burstColor = colorTrail.lastOrNull()?.toComposeColor() ?: Color.White
+            val burstColor = colorTrail.lastOrNull()?.toComposeColor() ?: EggTrail
             drawFireworkBurst(p, burstColor, scaleFactor, t, fp, fireworkRays)
         } else if (hitPos != null && s.hitIsShooterClash) {
             // 矢印同士の衝突: 命中はしているが狙い通りの接続ではないため、

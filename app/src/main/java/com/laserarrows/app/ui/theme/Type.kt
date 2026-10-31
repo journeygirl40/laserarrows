@@ -8,10 +8,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.R
 
-val SpaceGroteskFontFamily = FontFamily(
-    Font(R.font.space_grotesk_regular, FontWeight.Normal),
-    Font(R.font.space_grotesk_medium, FontWeight.Medium),
-    Font(R.font.space_grotesk_bold, FontWeight.Bold),
+/** 丸みのある日本語フォント(M PLUS Rounded 1c)。カジュアルゲームらしい柔らかさと、太字での存在感を両立する。 */
+val RoundedFontFamily = FontFamily(
+    Font(R.font.mplus_rounded_medium, FontWeight.Normal),
+    Font(R.font.mplus_rounded_medium, FontWeight.Medium),
+    Font(R.font.mplus_rounded_bold, FontWeight.SemiBold),
+    Font(R.font.mplus_rounded_bold, FontWeight.Bold),
+    Font(R.font.mplus_rounded_black, FontWeight.ExtraBold),
+    Font(R.font.mplus_rounded_black, FontWeight.Black),
 )
 
 private val baseTypography = Typography(
@@ -21,21 +25,22 @@ private val baseTypography = Typography(
     labelSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 9.5.sp, letterSpacing = 1.sp),
 )
 
-/** 2026年らしい、幾何学的で少し未来感のあるフォント(Space Grotesk)を全体に適用する。 */
+private fun TextStyle.rounded() = copy(fontFamily = RoundedFontFamily, color = TextPrimary)
+
 val LaserArrowsTypography = Typography(
-    displayLarge = baseTypography.displayLarge.copy(fontFamily = SpaceGroteskFontFamily),
-    displayMedium = baseTypography.displayMedium.copy(fontFamily = SpaceGroteskFontFamily),
-    displaySmall = baseTypography.displaySmall.copy(fontFamily = SpaceGroteskFontFamily),
-    headlineLarge = baseTypography.headlineLarge.copy(fontFamily = SpaceGroteskFontFamily),
-    headlineMedium = baseTypography.headlineMedium.copy(fontFamily = SpaceGroteskFontFamily),
-    headlineSmall = baseTypography.headlineSmall.copy(fontFamily = SpaceGroteskFontFamily),
-    titleLarge = baseTypography.titleLarge.copy(fontFamily = SpaceGroteskFontFamily),
-    titleMedium = baseTypography.titleMedium.copy(fontFamily = SpaceGroteskFontFamily),
-    titleSmall = baseTypography.titleSmall.copy(fontFamily = SpaceGroteskFontFamily),
-    bodyLarge = baseTypography.bodyLarge.copy(fontFamily = SpaceGroteskFontFamily),
-    bodyMedium = baseTypography.bodyMedium.copy(fontFamily = SpaceGroteskFontFamily),
-    bodySmall = baseTypography.bodySmall.copy(fontFamily = SpaceGroteskFontFamily),
-    labelLarge = baseTypography.labelLarge.copy(fontFamily = SpaceGroteskFontFamily),
-    labelMedium = baseTypography.labelMedium.copy(fontFamily = SpaceGroteskFontFamily),
-    labelSmall = baseTypography.labelSmall.copy(fontFamily = SpaceGroteskFontFamily),
+    displayLarge = baseTypography.displayLarge.rounded(),
+    displayMedium = baseTypography.displayMedium.rounded(),
+    displaySmall = baseTypography.displaySmall.rounded(),
+    headlineLarge = baseTypography.headlineLarge.rounded(),
+    headlineMedium = baseTypography.headlineMedium.rounded(),
+    headlineSmall = baseTypography.headlineSmall.rounded(),
+    titleLarge = baseTypography.titleLarge.rounded(),
+    titleMedium = baseTypography.titleMedium.rounded(),
+    titleSmall = baseTypography.titleSmall.rounded(),
+    bodyLarge = baseTypography.bodyLarge.rounded(),
+    bodyMedium = baseTypography.bodyMedium.rounded(),
+    bodySmall = baseTypography.bodySmall.rounded(),
+    labelLarge = baseTypography.labelLarge.rounded(),
+    labelMedium = baseTypography.labelMedium.rounded(),
+    labelSmall = baseTypography.labelSmall.rounded(),
 )

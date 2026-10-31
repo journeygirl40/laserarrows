@@ -1,20 +1,20 @@
 package com.laserarrows.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val LaserArrowsColorScheme = darkColorScheme(
+private val LaserArrowsColorScheme = lightColorScheme(
     primary = Neon1,
     secondary = Neon2,
-    background = Bg1,
-    surface = Bg2,
+    background = Bg2,
+    surface = GlassFill,
     error = DangerColor,
-    onPrimary = TextPrimary,
-    onSecondary = TextPrimary,
+    onPrimary = GlassHi,
+    onSecondary = GlassHi,
     onBackground = TextPrimary,
     onSurface = TextPrimary,
-    onError = TextPrimary,
+    onError = GlassHi,
 )
 
 @Composable

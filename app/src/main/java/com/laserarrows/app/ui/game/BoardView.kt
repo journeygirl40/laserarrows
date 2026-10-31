@@ -1,14 +1,20 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.GameText
+import com.laserarrows.app.ui.theme.WoodDark
+import com.laserarrows.app.ui.theme.EggTrail
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.draw.rotate
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,7 +22,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,25 +35,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.laserarrows.app.R
 import com.laserarrows.app.engine.Board
 import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.Tile
+import com.laserarrows.app.ui.components.ChunkySurface
+import com.laserarrows.app.ui.theme.BoardGrassDark
 import com.laserarrows.app.ui.theme.GoldColor
-import com.laserarrows.app.ui.theme.TextMuted
+import com.laserarrows.app.ui.theme.animalRes
 import com.laserarrows.app.ui.theme.toComposeColor
 
 @Composable
@@ -63,10 +74,8 @@ fun BoardView(
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (c in 0 until board.cols) {
                     val pos = CellPos(r, c)
-                    val tile = board.tiles[pos]
-                    ArrowTile(
-                        tile = tile,
-                        cols = board.cols,
+                    AnimalTile(
+                        tile = board.tiles[pos],
                         sizeDp = cellSizeDp,
                         shaking = pos == shakeCell,
                         emptyTappable = emptyCellsTappable,
@@ -79,17 +88,9 @@ fun BoardView(
     }
 }
 
-private fun arrowGlyph(dir: Direction): String = when (dir) {
-    Direction.U -> "↑"
-    Direction.D -> "↓"
-    Direction.L -> "←"
-    Direction.R -> "→"
-}
-
 @Composable
-private fun ArrowTile(
+private fun AnimalTile(
     tile: Tile?,
-    cols: Int,
     sizeDp: Dp,
     shaking: Boolean,
     emptyTappable: Boolean,
@@ -105,211 +106,145 @@ private fun ArrowTile(
             offsetX.animateTo(0f, tween(75))
         }
     }
-
-    val fireFlash = remember { Animatable(0f) }
-    LaunchedEffect(firing) {
-        if (firing) {
-            fireFlash.snapTo(1f)
-            fireFlash.animateTo(0f, tween(420, easing = FastOutSlowInEasing))
-        }
-    }
-
-    val shape = RoundedCornerShape(10.dp)
-    var boxModifier = Modifier
-        .size(sizeDp)
-        .offset(x = offsetX.value.dp)
-
-    if (tile != null) {
-        val hex = if (firing) TextMuted else tile.color.toComposeColor()
-        boxModifier = boxModifier
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.5.dp, hex, shape)
-            .clickable(onClick = onClick)
-    } else if (emptyTappable) {
-        boxModifier = boxModifier
-            .clip(shape)
-            .background(GoldColor.copy(alpha = 0.08f))
-            .border(1.5.dp, GoldColor.copy(alpha = 0.5f), shape)
-            .clickable(onClick = onClick)
-    }
-
-    Box(modifier = boxModifier, contentAlignment = Alignment.Center) {
+    val shape = RoundedCornerShape(sizeDp * 0.26f)
+    Box(modifier = Modifier.size(sizeDp).offset(x = offsetX.value.dp)) {
         when (tile) {
-            is Tile.Shooter -> {
-                ShooterGlow(
-                    color = tile.color.toComposeColor(),
-                    flash = fireFlash.value,
-                    active = !firing,
-                    sizeDp = sizeDp,
-                )
-                Text(
-                    text = arrowGlyph(tile.dir),
-                    color = if (firing) TextMuted else tile.color.toComposeColor(),
-                    fontWeight = FontWeight.Black,
-                    fontSize = (28 - cols).coerceAtLeast(15).sp,
-                )
-            }
-            is Tile.Receiver -> ReceiverOrb(color = tile.color.toComposeColor(), sizeDp = sizeDp)
-            null -> if (emptyTappable) {
-                Text("+", color = GoldColor.copy(alpha = 0.6f), fontWeight = FontWeight.Black, fontSize = 16.sp)
-            }
+            is Tile.Shooter -> RunnerTile(tile, sizeDp, shape, firing, onClick)
+            is Tile.Receiver -> WaitingTile(tile, sizeDp, shape, onClick)
+            null -> EmptyCell(sizeDp, shape, emptyTappable, onClick)
         }
     }
 }
 
+/**
+ * 走り出す子: 動物の色のぷっくりしたマスに3Dの顔。走る向きは、縁に付いた白い丸札の矢印で示す。
+ * なぞのたまごは生成り色のマスに3Dのたまごと「?」を載せ、まだ何者でもないことを見せる。
+ */
 @Composable
-private fun ShooterGlow(color: Color, flash: Float, active: Boolean, sizeDp: Dp) {
-    val infiniteTransition = rememberInfiniteTransition(label = "shooterBreath")
-    val breath by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shooterBreathAlpha",
-    )
-    // 単純な呼吸だけだと機械的なので、周期の違う揺らぎを重ねて火種のような不規則さを出す。
-    val flicker by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(370, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shooterFlicker",
-    )
-    val baseAlpha = if (active) breath * flicker else 0.22f
-    val glowAlpha = (baseAlpha * 0.4f + flash * 0.55f).coerceIn(0f, 1f)
-    val glowScale = 1f + flash * 0.35f
-    // 花火の光暈のように、外側のやわらかい広がりを1枚重ねてから芯の光を置く。
-    Box(
-        modifier = Modifier
-            .size(sizeDp * 0.98f)
-            .scale(glowScale)
-            .clip(CircleShape)
-            .background(Brush.radialGradient(listOf(color.copy(alpha = glowAlpha * 0.32f), color.copy(alpha = 0f)))),
-    )
-    Box(
-        modifier = Modifier
-            .size(sizeDp * 0.68f)
-            .scale(glowScale)
-            .clip(CircleShape)
-            .background(Brush.radialGradient(listOf(color.copy(alpha = glowAlpha), color.copy(alpha = 0f)))),
-    )
-    // 芯の白熱コア(花火の光条が根元で白く熱くなるのと同じ質感を、発射前の火種にも持たせる)。
-    val coreAlpha = if (active) (0.55f + flash * 0.45f).coerceAtMost(1f) * flicker else 0.3f
-    Box(
-        modifier = Modifier
-            .size(sizeDp * (0.22f + flash * 0.1f))
-            .scale(glowScale)
-            .clip(CircleShape)
-            .background(Brush.radialGradient(listOf(Color.White.copy(alpha = coreAlpha), color.copy(alpha = coreAlpha * 0.7f), color.copy(alpha = 0f)))),
-    )
-    // 発射待ちの火種らしい、細かくきらめく十字の光条(受光側より速く・強めに明滅させて「これから発射する」energy差を出す)。
-    val sparkleTransition = rememberInfiniteTransition(label = "shooterSparkle")
-    val sparkleRotation by sparkleTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(animation = tween(3400, easing = LinearEasing)),
-        label = "shooterSparkleRotation",
-    )
-    val sparkleAlpha by sparkleTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(420, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "shooterSparkleAlpha",
-    )
-    if (active) {
-        Canvas(modifier = Modifier.size(sizeDp * 0.8f).rotate(sparkleRotation)) {
-            val r = size.minDimension / 2f
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            val inner = r * 0.45f
-            val a = sparkleAlpha * flicker
-            drawLine(Color.White.copy(alpha = a), Offset(cx, cy - r), Offset(cx, cy - inner), strokeWidth = 1.3f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = a), Offset(cx, cy + inner), Offset(cx, cy + r), strokeWidth = 1.3f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = a * 0.7f), Offset(cx - r, cy), Offset(cx - inner, cy), strokeWidth = 1.1f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = a * 0.7f), Offset(cx + inner, cy), Offset(cx + r, cy), strokeWidth = 1.1f, cap = StrokeCap.Round)
+private fun RunnerTile(tile: Tile.Shooter, sizeDp: Dp, shape: RoundedCornerShape, firing: Boolean, onClick: () -> Unit) {
+    val color = if (tile.egg) EggTrail else tile.color.toComposeColor()
+    ChunkySurface(
+        face = color,
+        edge = lerp(color, Color.Black, 0.28f),
+        shape = shape,
+        edgeHeight = sizeDp * 0.07f,
+        onClick = onClick,
+        modifier = Modifier.fillMaxSize().alpha(if (firing) 0.55f else 1f),
+    ) {
+        Image(
+            painterResource(if (tile.egg) R.drawable.icon_egg else tile.color.animalRes()),
+            contentDescription = null,
+            modifier = Modifier.size(sizeDp * 0.6f),
+        )
+        if (tile.egg) {
+            GameText(
+                "?",
+                fontSize = with(LocalDensity.current) { (sizeDp * 0.3f).toSp() },
+                color = WoodDark,
+                modifier = Modifier.align(Alignment.TopStart).offset(x = sizeDp * 0.1f, y = sizeDp * 0.02f),
+            )
         }
+        DirectionChip(tile.dir, color, sizeDp)
     }
 }
 
 @Composable
-private fun ReceiverOrb(color: Color, sizeDp: Dp) {
-    val infiniteTransition = rememberInfiniteTransition(label = "orbPulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.14f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "orbScale",
-    )
-    val haloAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.22f,
-        targetValue = 0.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "orbHalo",
-    )
-    // 打ち上がる前の花火玉のように、ゆっくり回るきらめきを重ねる(halo/coreとは別周期で回転・明滅させ、機械的に見えないようにする)。
-    val sparkleTransition = rememberInfiniteTransition(label = "orbSparkle")
-    val sparkleRotation by sparkleTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(animation = tween(5200, easing = LinearEasing)),
-        label = "orbSparkleRotation",
-    )
-    val sparkleAlpha by sparkleTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "orbSparkleAlpha",
-    )
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(sizeDp)) {
-        Box(
-            modifier = Modifier
-                .size(sizeDp * 0.9f)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(color.copy(alpha = haloAlpha), color.copy(alpha = 0f)))),
-        )
-        Box(
-            modifier = Modifier
-                .size(sizeDp * 0.52f)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color.White, color))),
-        )
-        Canvas(modifier = Modifier.size(sizeDp * 0.86f).rotate(sparkleRotation)) {
-            val r = size.minDimension / 2f
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            val inner = r * 0.4f
-            drawLine(Color.White.copy(alpha = sparkleAlpha), Offset(cx, cy - r), Offset(cx, cy - inner), strokeWidth = 1.4f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = sparkleAlpha), Offset(cx, cy + inner), Offset(cx, cy + r), strokeWidth = 1.4f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = sparkleAlpha * 0.7f), Offset(cx - r, cy), Offset(cx - inner, cy), strokeWidth = 1.2f, cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = sparkleAlpha * 0.7f), Offset(cx + inner, cy), Offset(cx + r, cy), strokeWidth = 1.2f, cap = StrokeCap.Round)
+private fun androidx.compose.foundation.layout.BoxScope.DirectionChip(dir: Direction, color: Color, sizeDp: Dp) {
+    // 小さな盤面(列が多い時)でも矢印が潰れないよう、丸札には最小の大きさを持たせる。
+    val chip = (sizeDp * 0.32f).coerceAtLeast(17.dp)
+    val align = when (dir) {
+        Direction.U -> Alignment.TopCenter
+        Direction.D -> Alignment.BottomCenter
+        Direction.L -> Alignment.CenterStart
+        Direction.R -> Alignment.CenterEnd
+    }
+    val nudge = sizeDp * 0.04f
+    val (dx, dy) = when (dir) {
+        Direction.U -> 0.dp to -nudge
+        Direction.D -> 0.dp to nudge
+        Direction.L -> -nudge to 0.dp
+        Direction.R -> nudge to 0.dp
+    }
+    Box(
+        modifier = Modifier
+            .align(align)
+            .offset(x = dx, y = dy)
+            .size(chip)
+            .shadow(3.dp, CircleShape)
+            .background(Color.White, CircleShape)
+            .border(1.5.dp, color, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 文字の矢印は小さいと上下が切れて読めなくなるため、線と三角で描く(どの大きさでもくっきり見える)。
+        val ink = lerp(color, Color.Black, 0.25f)
+        val angle = when (dir) {
+            Direction.R -> 0f
+            Direction.D -> 90f
+            Direction.L -> 180f
+            Direction.U -> 270f
         }
-        Box(
-            modifier = Modifier
-                .size(sizeDp * 0.14f)
-                .scale(scale)
-                .offset(x = -(sizeDp * 0.12f), y = -(sizeDp * 0.12f))
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.85f)),
+        Canvas(modifier = Modifier.fillMaxSize().padding(chip * 0.2f).rotate(angle)) {
+            val w = size.width
+            val h = size.height
+            drawLine(ink, Offset(w * 0.08f, h / 2f), Offset(w * 0.6f, h / 2f), strokeWidth = h * 0.2f, cap = StrokeCap.Round)
+            val head = Path().apply {
+                moveTo(w * 0.98f, h / 2f)
+                lineTo(w * 0.48f, h * 0.1f)
+                lineTo(w * 0.48f, h * 0.9f)
+                close()
+            }
+            drawPath(head, ink)
+        }
+    }
+}
+
+/** 相手を待っている子: 白いマスに動物の色の縁取り。顔がふわふわ揺れ、3Dのハートを浮かべている。 */
+@Composable
+private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerShape, onClick: () -> Unit) {
+    val color = tile.color.toComposeColor()
+    val transition = rememberInfiniteTransition(label = "waiting")
+    val bob by transition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "waitingBob",
+    )
+    ChunkySurface(
+        face = lerp(color, Color.White, 0.82f),
+        edge = lerp(color, Color.Black, 0.1f),
+        shape = shape,
+        edgeHeight = sizeDp * 0.07f,
+        borderColor = color,
+        onClick = onClick,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Image(
+            painterResource(tile.color.animalRes()),
+            contentDescription = null,
+            modifier = Modifier.size(sizeDp * 0.56f).scale(bob),
         )
+        Image(
+            painterResource(R.drawable.icon_heart),
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = sizeDp * 0.06f, y = -(sizeDp * 0.06f))
+                .size(sizeDp * 0.34f)
+                .scale(2.1f - bob),
+        )
+    }
+}
+
+/** 何もないマス: 芝生に少しくぼんだ跡。仲間を呼ぶ時だけ金色に光って押せるようになる。 */
+@Composable
+private fun EmptyCell(sizeDp: Dp, shape: RoundedCornerShape, tappable: Boolean, onClick: () -> Unit) {
+    var m = Modifier
+        .fillMaxSize()
+        .padding(sizeDp * 0.08f)
+        .background(if (tappable) Color.White.copy(alpha = 0.55f) else BoardGrassDark.copy(alpha = 0.7f), shape)
+    if (tappable) m = m.border(1.5.dp, GoldColor.copy(alpha = 0.7f), shape).clickable(onClick = onClick)
+    Box(modifier = m, contentAlignment = Alignment.Center) {
+        if (tappable) Text("+", color = GoldColor.copy(alpha = 0.8f), fontWeight = FontWeight.Black)
     }
 }
 
@@ -332,9 +267,9 @@ fun BoardPreview(board: Board, modifier: Modifier = Modifier) {
             for (c in 0 until board.cols) {
                 val tile = board.tiles[CellPos(r, c)]
                 val color = when (tile) {
-                    is Tile.Shooter -> tile.color.toComposeColor()
-                    is Tile.Receiver -> tile.color.toComposeColor()
-                    null -> Color.White.copy(alpha = 0.06f)
+                    is Tile.Shooter -> if (tile.egg) EggTrail else tile.color.toComposeColor()
+                    is Tile.Receiver -> lerp(tile.color.toComposeColor(), Color.White, 0.6f)
+                    null -> BoardGrassDark
                 }
                 drawRoundRect(
                     color = color,

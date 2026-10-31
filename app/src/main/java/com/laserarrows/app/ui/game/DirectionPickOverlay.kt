@@ -40,7 +40,7 @@ fun DirectionPickOverlay(
     ) {
         Text("矢印の向きを選択", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
         Text(
-            "レーザーを発射する向きを選んでください",
+            "走り出す向きを選んでください",
             fontSize = 12.5.sp,
             color = TextMuted,
             textAlign = TextAlign.Center,

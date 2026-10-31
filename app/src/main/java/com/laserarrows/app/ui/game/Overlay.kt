@@ -13,7 +13,13 @@ sealed class Overlay {
     data object Favorites : Overlay()
     data object Editor : Overlay()
     data object None : Overlay()
-    data class Clear(val totalScore: Int, val livesLost: Int) : Overlay()
+    data class Clear(
+        val totalScore: Int,
+        val livesLost: Int,
+        val levelScore: Int = 0,
+        val par: Int = 0,
+        val stars: Int = 0,
+    ) : Overlay()
     data class GameOver(val beatBest: Boolean) : Overlay()
     data class ColorPick(val cell: CellPos, val choices: List<LaserColor>) : Overlay()
     data class DirectionPick(val cell: CellPos, val color: LaserColor) : Overlay()
