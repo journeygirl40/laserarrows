@@ -1,12 +1,6 @@
 package com.laserarrows.app.ui.game
 
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -27,14 +20,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +39,6 @@ import com.laserarrows.app.ui.components.CreamCard
 import com.laserarrows.app.ui.components.GameText
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
-import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon1
 import com.laserarrows.app.ui.theme.Neon1Edge
@@ -63,6 +54,8 @@ private enum class ChallengeMode { HIGH_SCORE, LEVEL_UP }
 fun HomeOverlay(
     bestScore: Int,
     forestPopulation: Int,
+    forestStageSeen: Int?,
+    onForestStageCelebrated: (level: Int) -> Unit,
     totalStars: Int,
     nextLevel: Int,
     hasActiveRun: Boolean,
@@ -78,6 +71,18 @@ fun HomeOverlay(
     modifier: Modifier = Modifier,
 ) {
     var confirmingMode by remember { mutableStateOf<ChallengeMode?>(null) }
+
+    // ハイスコアで森の段階が上がっていたら、ホームに戻ってきた時に一度だけ「にぎやかになった!」を見せる。
+    val forestLevel = ForestStage.of(bestScore).level
+    var celebrateLevel by remember { mutableStateOf<Int?>(null) }
+    var celebrateFrom by remember { mutableStateOf(0) }
+    LaunchedEffect(forestLevel, forestStageSeen) {
+        if (forestStageSeen != null && forestLevel > forestStageSeen) {
+            celebrateFrom = forestStageSeen + 1
+            celebrateLevel = forestLevel
+            onForestStageCelebrated(forestLevel)
+        }
+    }
 
     fun startMode(mode: ChallengeMode) {
         when (mode) {
@@ -104,19 +109,10 @@ fun HomeOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TitleLogo()
-                Spacer(modifier = Modifier.height(6.dp))
+                TitleForest(level = forestLevel, celebrateLevel = celebrateLevel, celebrateFrom = celebrateFrom)
                 GameText("アニマル・リンク", fontSize = 38.sp, color = Color(0xFFFFF6DE), outline = WoodDark)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "なかまを出会わせて、赤ちゃんを増やそう",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    modifier = Modifier
-                        .background(GlassFill.copy(alpha = 0.85f), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 14.dp, vertical = 5.dp),
-                )
+                ForestProgressPill(bestScore = bestScore)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -233,46 +229,6 @@ private fun ForestCard(population: Int, totalStars: Int, modifier: Modifier = Mo
                 Text("$totalStars", fontSize = 18.sp, fontWeight = FontWeight.Black, color = TextPrimary)
             }
         }
-    }
-}
-
-/** タイトルロゴ: 3Dの動物たちがハートを挟んで寄り添い、ゆらゆら弾む(遊ぶ前から「出会い」の題材を伝える)。 */
-@Composable
-private fun TitleLogo() {
-    val transition = rememberInfiniteTransition(label = "logo")
-    val bob by transition.animateFloat(
-        initialValue = -4f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(animation = tween(1400, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
-        label = "logoBob",
-    )
-    val heartPulse by transition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(animation = tween(700, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
-        label = "logoHeart",
-    )
-    Box(modifier = Modifier.size(width = 230.dp, height = 120.dp), contentAlignment = Alignment.Center) {
-        Image(
-            painterResource(R.drawable.animal_penguin),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.CenterStart).offset(x = 6.dp, y = (14 + bob).dp).size(72.dp).rotate(-10f),
-        )
-        Image(
-            painterResource(R.drawable.animal_rabbit),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.CenterEnd).offset(x = (-6).dp, y = (14 - bob).dp).size(72.dp).rotate(10f),
-        )
-        Image(
-            painterResource(R.drawable.icon_sparkling_heart),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.TopCenter).offset(y = 4.dp).size(54.dp).scale(heartPulse),
-        )
-        Image(
-            painterResource(R.drawable.animal_fox),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-bob / 2).dp).size(84.dp),
-        )
     }
 }
 

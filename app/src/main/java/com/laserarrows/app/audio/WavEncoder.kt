@@ -2,9 +2,9 @@ package com.laserarrows.app.audio
 
 import java.io.ByteArrayOutputStream
 
-/** 16bitモノラルPCMを、SoundPoolがロードできる最小限のWAV(RIFF)バイト列へ変換する。 */
+/** 16bitのPCM(ステレオは左右交互のインターリーブ)を、SoundPoolがロードできる最小限のWAV(RIFF)バイト列へ変換する。 */
 object WavEncoder {
-    fun encode(pcm: ShortArray, sampleRate: Int = 44100): ByteArray {
+    fun encode(pcm: ShortArray, sampleRate: Int = 44100, channels: Int = 1): ByteArray {
         val dataSize = pcm.size * 2
         val out = ByteArrayOutputStream(44 + dataSize)
 
@@ -26,10 +26,10 @@ object WavEncoder {
         writeString("fmt ")
         writeIntLE(16)
         writeShortLE(1) // PCM
-        writeShortLE(1) // mono
+        writeShortLE(channels)
         writeIntLE(sampleRate)
-        writeIntLE(sampleRate * 2) // byte rate (sampleRate * channels * bytesPerSample)
-        writeShortLE(2) // block align
+        writeIntLE(sampleRate * channels * 2) // byte rate (sampleRate * channels * bytesPerSample)
+        writeShortLE(channels * 2) // block align
         writeShortLE(16) // bits per sample
         writeString("data")
         writeIntLE(dataSize)

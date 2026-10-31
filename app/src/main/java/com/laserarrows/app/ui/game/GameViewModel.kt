@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -59,6 +60,7 @@ class GameViewModel(
                         levelBestScore = current.levelBestScore,
                         levelStars = current.levelStars,
                         forestPopulation = current.forestPopulation,
+                        forestStageSeen = current.forestStageSeen,
                         eggIntroSeen = current.eggIntroSeen,
                         importHistory = current.importHistory,
                     )
@@ -107,6 +109,14 @@ class GameViewModel(
         viewModelScope.launch {
             progressStore.eggIntroSeen.collect { seen ->
                 _uiState.update { it.copy(eggIntroSeen = seen) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.best.combine(progressStore.forestStageSeen) { best, seen -> best.score to seen }.collect { (score, seen) ->
+                val current = ForestStage.of(score).level
+                // この機能が入る前から遊んでいた人は、今の段階を「見届け済み」から始める(起動直後にいきなり祝わない)。
+                if (seen < 0) progressStore.saveForestStageSeen(current)
+                _uiState.update { it.copy(forestStageSeen = if (seen < 0) current else seen) }
             }
         }
         viewModelScope.launch {
@@ -293,6 +303,7 @@ class GameViewModel(
                 levelBestScore = it.levelBestScore,
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
+                forestStageSeen = it.forestStageSeen,
                 eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
             )
@@ -448,6 +459,7 @@ class GameViewModel(
                 levelBestScore = it.levelBestScore,
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
+                forestStageSeen = it.forestStageSeen,
                 eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
                 board = board,
@@ -544,6 +556,7 @@ class GameViewModel(
                 levelBestScore = it.levelBestScore,
                 levelStars = it.levelStars,
                 forestPopulation = it.forestPopulation,
+                forestStageSeen = it.forestStageSeen,
                 eggIntroSeen = it.eggIntroSeen,
                 importHistory = it.importHistory,
                 board = board,
@@ -601,10 +614,15 @@ class GameViewModel(
         return ReplayEngine.encodeSteps(steps)
     }
 
-    /** ビーム経路のリビールアニメーションが完了した時点でCompose側から呼ばれる。 */
+    /** ビーム経路のリビールアニメーションが完了した時点でCompose側から呼ばれる。
+     * 相手の子に届いた時は、出会い演出で二人がくっつく瞬間に合わせて到達音を鳴らす。 */
     fun onShotRevealFinished() {
-        val shot = _uiState.value.activeShot ?: return
-        if (shot.result.hit != null) {
+        val current = _uiState.value
+        val shot = current.activeShot ?: return
+        val hitKey = shot.result.hit ?: return
+        if (current.board.tiles[hitKey] is Tile.Receiver) {
+            sfxEngine.playConnect(current.combo + 1, delayMs = MEET_BUMP_DELAY_MS)
+        } else {
             sfxEngine.playHitConfirm()
         }
     }
@@ -642,7 +660,6 @@ class GameViewModel(
             val justBeatHighScore = gained > 0 && !current.crossedHighScoreThisRun && current.bestScoreAtRunStart > 0 &&
                 current.score <= current.bestScoreAtRunStart && newScore > current.bestScoreAtRunStart
             if (wasReceiver) {
-                sfxEngine.playConnect(newCombo)
                 if (justBeatHighScore) {
                     sfxEngine.playHighScore()
                 }
@@ -691,6 +708,22 @@ class GameViewModel(
                 }
             }
         }
+    }
+
+    // ---- タイトルの森 ----
+    /** ホームで森の段階が上がったのを見せた時に呼ぶ。同じ段階で二度祝わないよう記録し、祝いの音を鳴らす。 */
+    fun onForestStageCelebrated(level: Int) {
+        sfxEngine.playForestLevelUp()
+        _uiState.update { it.copy(forestStageSeen = level) }
+        viewModelScope.launch { progressStore.saveForestStageSeen(level) }
+    }
+
+    // ---- クリア画面のパレード ----
+    fun onParadePop(index: Int) = sfxEngine.playParadePop(index)
+
+    /** 全員が並び終えた瞬間。★3の時だけ締めのベルで一番盛り上げる。 */
+    fun onParadeAllMet(stars: Int) {
+        if (stars >= 3) sfxEngine.playParadeFinale()
     }
 
     // ---- ツールバー ----
@@ -865,14 +898,15 @@ class GameViewModel(
                 viewModelScope.launch { progressStore.recordFavoriteClear(favoriteImportedAt, livesLost, replayLog) }
             }
         }
-        val finaleBursts = current.history
+        val meetings = current.history
             .filterIsInstance<HistoryEntry.Shot>()
             .filter { it.wasReceiver }
-            .map { FinaleBurst(it.removedBPos, it.removedBTile.color) }
+        val finaleBursts = meetings.map { FinaleBurst(it.removedBPos, it.removedBTile.color) }
+        val couples = meetings.map { ClearCouple(it.removedBTile.color, babyRunner = (it.removedATile as? Tile.Shooter)?.egg == true) }
         _uiState.update {
             it.copy(
                 score = totalScore,
-                overlay = Overlay.Clear(totalScore, livesLost, levelScore, par, stars),
+                overlay = Overlay.Clear(totalScore, livesLost, levelScore, par, stars, couples),
                 hasActiveRun = false,
                 clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,
             )

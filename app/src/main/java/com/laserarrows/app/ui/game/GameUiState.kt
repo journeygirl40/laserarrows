@@ -123,6 +123,8 @@ data class GameUiState(
     val forestPopulation: Int = 0,
     /** 「なぞのたまご」の説明を見たことがあるか。 */
     val eggIntroSeen: Boolean = false,
+    /** タイトルの森の段階をどこまで見届けたか。読み込み前はnull(その間は「にぎやかになった!」を出さない)。 */
+    val forestStageSeen: Int? = null,
     /** 「なぞのたまご」の説明を今表示しているか(初めてたまごが出た盤面で一度だけ)。 */
     val showEggIntro: Boolean = false,
     /** 盤面を作っている最中の進捗(0〜1)。作っていない時はnull。1秒以上かかる時だけ読み込みバーを出す。 */

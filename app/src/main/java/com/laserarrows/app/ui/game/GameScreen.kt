@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -120,6 +121,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             uiState.overlay == Overlay.Home -> HomeOverlay(
                 bestScore = uiState.bestScore,
                 forestPopulation = uiState.forestPopulation,
+                forestStageSeen = uiState.forestStageSeen,
+                onForestStageCelebrated = { viewModel.onForestStageCelebrated(it) },
                 totalStars = uiState.totalStars,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
@@ -347,6 +350,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                 onTapCell = { viewModel.handleTap(it) },
                                 emptyCellsTappable = uiState.addingLight,
                                 firingCell = uiState.activeShot?.originKey,
+                                meetingCell = uiState.activeShot?.takeIf { !it.hitIsShooterClash }?.result?.hit,
                             )
                             BeamCanvas(
                                 shot = uiState.activeShot,
@@ -484,25 +488,41 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
             }
         }
 
+        // クリア画面の間は、使い道のないツールバーの場所に「出会えたふたり組」のパレードを出す。
+        // ツールバー自体は透明にして残し、盤面の大きさ(=クリア花火の位置)が変わらないようにする。
+        val parade = (uiState.overlay as? Overlay.Clear)?.takeIf { it.couples.isNotEmpty() }
         Box(modifier = Modifier.fillMaxWidth()) {
             Toolbar(
-                undoEnabled = uiState.history.isNotEmpty() && uiState.lives > 0,
-                restartEnabled = uiState.lives > 0,
+                undoEnabled = parade == null && uiState.history.isNotEmpty() && uiState.lives > 0,
+                restartEnabled = parade == null && uiState.lives > 0,
                 addLightActive = uiState.addingLight,
-                addLightEnabled = uiState.lives > 0,
+                addLightEnabled = parade == null && uiState.lives > 0,
                 onUndo = { viewModel.undo() },
                 onRestartLevel = { viewModel.restartLevel() },
                 onToggleAddLight = { viewModel.toggleAddLight() },
                 onShare = {
-                    val code = viewModel.exportCurrentBoard()
-                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, code)
+                    if (parade == null) {
+                        val code = viewModel.exportCurrentBoard()
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, code)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, null))
                     }
-                    context.startActivity(Intent.createChooser(sendIntent, null))
                 },
-                modifier = Modifier.padding(horizontal = 2.dp),
+                modifier = Modifier.padding(horizontal = 2.dp).alpha(if (parade == null) 1f else 0f),
             )
+            if (parade != null) {
+                MeetParade(
+                    couples = parade.couples,
+                    stars = parade.stars,
+                    levelScore = parade.levelScore,
+                    par = parade.par,
+                    onCouplePop = { viewModel.onParadePop(it) },
+                    onAllMet = { viewModel.onParadeAllMet(parade.stars) },
+                    modifier = Modifier.matchParentSize().padding(horizontal = 2.dp),
+                )
+            }
         }
     }
 }

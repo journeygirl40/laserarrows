@@ -130,6 +130,7 @@ fun ReplayOverlay(
                                     shakeCell = null,
                                     onTapCell = {},
                                     firingCell = if (showBeam) frame.firedFrom else null,
+                                    meetingCell = if (showBeam && !frame.shotHitIsShooterClash) frame.shotResult?.hit else null,
                                 )
                                 if (showBeam) {
                                     val shotResult = frame.shotResult

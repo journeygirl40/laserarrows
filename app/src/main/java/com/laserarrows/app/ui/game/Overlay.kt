@@ -19,6 +19,8 @@ sealed class Overlay {
         val levelScore: Int = 0,
         val par: Int = 0,
         val stars: Int = 0,
+        /** このステージで出会えたふたり組(出会った順)。クリア画面下のパレードに並べる。 */
+        val couples: List<ClearCouple> = emptyList(),
     ) : Overlay()
     data class GameOver(val beatBest: Boolean) : Overlay()
     data class ColorPick(val cell: CellPos, val choices: List<LaserColor>) : Overlay()
@@ -26,3 +28,6 @@ sealed class Overlay {
     /** お気に入りのクリア記録を一手ごとに振り返る画面。stepIndexは0(初期盤面)〜steps.size(全手適用後)。 */
     data class Replay(val entry: ImportHistoryEntry, val initialBoard: Board, val steps: List<ReplayEngine.Step>, val stepIndex: Int) : Overlay()
 }
+
+/** 出会えたふたり組1組分。babyRunner=走ってきた子がたまご生まれの赤ちゃんだった。 */
+data class ClearCouple(val color: LaserColor, val babyRunner: Boolean)

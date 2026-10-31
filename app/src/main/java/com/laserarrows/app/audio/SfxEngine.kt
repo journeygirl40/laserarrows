@@ -3,12 +3,13 @@ package com.laserarrows.app.audio
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
-import com.laserarrows.app.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.pow
+import kotlin.random.Random
 
 /**
  * 効果音は全て起動時に一度だけPCM波形を生成してWAVに書き出し、SoundPoolへ
@@ -31,14 +32,14 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
 
     private val soundIds = mutableMapOf<String, Int>()
 
-    /** 発射音(laser.mp3)の再生中ストリームID。着弾音が鳴り始めたら途中でも打ち切る。 */
-    private var fireStreamId: Int = 0
+    /** タップ音のラウンドロビン位置。毎回同じ波形にならないよう順番に切り替える。 */
+    private var tapVariant = 0
 
     init {
-        soundIds["laser"] = soundPool.load(appContext, R.raw.laser, 1)
-        soundIds["fireflower"] = soundPool.load(appContext, R.raw.fireflower, 1)
         scope.launch(Dispatchers.IO) {
-            preload("hit_tick", 3000.0, 4200.0, 0.035, Waveform.SINE, harmonics = listOf(2 to 0.25))
+            repeat(SignatureSfx.TAP_VARIANTS) { v -> preloadStereo("tap_$v", SignatureSfx.renderTap(v)) }
+            preloadStereo("hit_touch", SignatureSfx.renderHitTouch())
+            preloadStereo("heart_arrival", SignatureSfx.renderHeartArrival())
             // ミス音: 濁った倍音を足して虚しさを強調。
             preload("miss_thud", 180.0, 90.0, 0.15, Waveform.SAWTOOTH, attackSec = 0.01, harmonics = listOf(2 to 0.22))
             preload("miss_noise", 700.0, 100.0, 0.12, Waveform.NOISE, noiseSmoothing = 0.55)
@@ -77,6 +78,12 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         soundIds[name] = soundPool.load(file.path, 1)
     }
 
+    private fun preloadStereo(name: String, pcm: ShortArray) {
+        val file = File(appContext.cacheDir, "sfx_$name.wav")
+        file.writeBytes(WavEncoder.encode(pcm, SignatureSfx.SAMPLE_RATE, channels = 2))
+        soundIds[name] = soundPool.load(file.path, 1)
+    }
+
     private fun play(name: String, volume: Double, rate: Double = 1.0, delayMs: Long = 0) {
         scope.launch {
             if (delayMs > 0) delay(delayMs)
@@ -86,38 +93,39 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** 発射音(laser.mp3)。着弾音(playConnect)が鳴り始めたら途切れさせる。 */
+    /** 矢印をタップした瞬間の木琴風「ポコッ」。3種の波形を順番に使い、音程も±1.5%揺らして機械的な連打感を消す。 */
     fun playFire() {
-        val id = soundIds["laser"] ?: return
-        fireStreamId = soundPool.play(id, FIRE_VOLUME, FIRE_VOLUME, 1, 0, 1f)
+        val v = tapVariant
+        tapVariant = (tapVariant + 1) % SignatureSfx.TAP_VARIANTS
+        play("tap_$v", volume = TAP_VOLUME, rate = Random.nextDouble(0.985, 1.015))
     }
 
-    /** ビームが的に届いた瞬間の短く軽いタッチ音(直後の着弾音の前振り)。 */
+    /** ビームが的に届いた瞬間の小さなガラスの「ティン」(直後の到達音の前振り)。 */
     fun playHitConfirm() {
-        play("hit_tick", volume = 0.1)
+        play("hit_touch", volume = HIT_TOUCH_VOLUME)
     }
 
-    /** 受光して消える瞬間の音(fireflower.mp3)。発射音が鳴り続けていれば打ち切ってから鳴らし、
-     * 全体を3秒として2秒地点から3秒地点にかけてフェードアウトさせる。 */
-    fun playConnect(@Suppress("UNUSED_PARAMETER") combo: Int) {
-        if (fireStreamId != 0) {
-            soundPool.stop(fireStreamId)
-            fireStreamId = 0
-        }
-        val id = soundIds["fireflower"] ?: return
-        val streamId = soundPool.play(id, CONNECT_VOLUME, CONNECT_VOLUME, 1, 0, 1f)
-        if (streamId == 0) return
-        scope.launch {
-            delay(FADE_START_MS)
-            val steps = 20
-            val stepDelayMs = (FADE_DURATION_MS / steps).coerceAtLeast(1L)
-            for (step in 1..steps) {
-                val v = (CONNECT_VOLUME * (1f - step.toFloat() / steps)).coerceAtLeast(0f)
-                soundPool.setVolume(streamId, v, v)
-                delay(stepDelayMs)
-            }
-            soundPool.stop(streamId)
-        }
+    /** 相手の子(ハート)に出会えた瞬間のベルの和音。コンボが続くほどペンタトニックで一段ずつ明るく上がる。 */
+    fun playConnect(combo: Int, delayMs: Long = 0) {
+        val step = COMBO_STEPS[(combo - 1).coerceIn(0, COMBO_STEPS.lastIndex)]
+        play("heart_arrival", volume = HEART_VOLUME, rate = 2.0.pow(step / 12.0), delayMs = delayMs)
+    }
+
+    /** クリア画面のパレードで、出会えた組が1組ずつ現れるたびの木琴の音。組ごとにペンタトニックで駆け上がる。 */
+    fun playParadePop(index: Int) {
+        val step = PARADE_STEPS[index % PARADE_STEPS.size]
+        play("tap_${index % SignatureSfx.TAP_VARIANTS}", volume = PARADE_VOLUME, rate = 2.0.pow(step / 12.0))
+    }
+
+    /** ★3でクリアした時、パレードの全員が並び終えた瞬間に鳴らす締めのベル。 */
+    fun playParadeFinale() {
+        play("heart_arrival", volume = PARADE_FINALE_VOLUME, rate = 2.0.pow(7 / 12.0))
+    }
+
+    /** タイトルの森が一段にぎやかになった瞬間: 駆け上がるきらめきの後に、温かいベルの和音で締める。 */
+    fun playForestLevelUp() {
+        playHighScore()
+        play("heart_arrival", volume = 0.36, delayMs = 320)
     }
 
     fun playMiss() {
@@ -156,10 +164,14 @@ class SfxEngine(context: Context, private val scope: CoroutineScope) {
     }
 
     companion object {
-        private const val FIRE_VOLUME = 0.4f
-        private const val CONNECT_VOLUME = 0.4f
-        // fireflower.mp3は全体3秒を想定し、2秒地点から3秒地点(=1秒かけて)フェードアウトする。
-        private const val FADE_START_MS = 2000L
-        private const val FADE_DURATION_MS = 1000L
+        private const val TAP_VOLUME = 0.32
+        private const val HIT_TOUCH_VOLUME = 0.14
+        private const val HEART_VOLUME = 0.42
+        /** コンボ1,2,3,4以上での移調幅(半音)。ド→レ→ミ→ソ。高くなりすぎて耳に刺さらないよう5度で止める。 */
+        private val COMBO_STEPS = intArrayOf(0, 2, 4, 7)
+        private const val PARADE_VOLUME = 0.18
+        private const val PARADE_FINALE_VOLUME = 0.3
+        /** パレードの音階(半音)。ド・レ・ミ・ソ・ラ・ドを繰り返し上る。 */
+        private val PARADE_STEPS = intArrayOf(0, 2, 4, 7, 9, 12)
     }
 }

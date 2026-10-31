@@ -68,6 +68,8 @@ fun BoardView(
     modifier: Modifier = Modifier,
     emptyCellsTappable: Boolean = false,
     firingCell: CellPos? = null,
+    /** 出会いの演出中の相手のマス。その間はBeamCanvasが顔を動かして描くので、マスの顔は隠す。 */
+    meetingCell: CellPos? = null,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         for (r in 0 until board.rows) {
@@ -80,6 +82,7 @@ fun BoardView(
                         shaking = pos == shakeCell,
                         emptyTappable = emptyCellsTappable,
                         firing = pos == firingCell,
+                        meeting = pos == meetingCell,
                         onClick = { onTapCell(pos) },
                     )
                 }
@@ -95,6 +98,7 @@ private fun AnimalTile(
     shaking: Boolean,
     emptyTappable: Boolean,
     firing: Boolean,
+    meeting: Boolean,
     onClick: () -> Unit,
 ) {
     val offsetX = remember { Animatable(0f) }
@@ -110,7 +114,7 @@ private fun AnimalTile(
     Box(modifier = Modifier.size(sizeDp).offset(x = offsetX.value.dp)) {
         when (tile) {
             is Tile.Shooter -> RunnerTile(tile, sizeDp, shape, firing, onClick)
-            is Tile.Receiver -> WaitingTile(tile, sizeDp, shape, onClick)
+            is Tile.Receiver -> WaitingTile(tile, sizeDp, shape, meeting, onClick)
             null -> EmptyCell(sizeDp, shape, emptyTappable, onClick)
         }
     }
@@ -119,6 +123,7 @@ private fun AnimalTile(
 /**
  * 走り出す子: 動物の色のぷっくりしたマスに3Dの顔。走る向きは、縁に付いた白い丸札の矢印で示す。
  * なぞのたまごは生成り色のマスに3Dのたまごと「?」を載せ、まだ何者でもないことを見せる。
+ * 走っている間(firing)は顔がビームに乗って出かけているので、空っぽのおうちだけを薄く残す。
  */
 @Composable
 private fun RunnerTile(tile: Tile.Shooter, sizeDp: Dp, shape: RoundedCornerShape, firing: Boolean, onClick: () -> Unit) {
@@ -131,12 +136,14 @@ private fun RunnerTile(tile: Tile.Shooter, sizeDp: Dp, shape: RoundedCornerShape
         onClick = onClick,
         modifier = Modifier.fillMaxSize().alpha(if (firing) 0.55f else 1f),
     ) {
-        Image(
-            painterResource(if (tile.egg) R.drawable.icon_egg else tile.color.animalRes()),
-            contentDescription = null,
-            modifier = Modifier.size(sizeDp * 0.6f),
-        )
-        if (tile.egg) {
+        if (!firing) {
+            Image(
+                painterResource(if (tile.egg) R.drawable.icon_egg else tile.color.animalRes()),
+                contentDescription = null,
+                modifier = Modifier.size(sizeDp * 0.6f),
+            )
+        }
+        if (tile.egg && !firing) {
             GameText(
                 "?",
                 fontSize = with(LocalDensity.current) { (sizeDp * 0.3f).toSp() },
@@ -198,9 +205,9 @@ private fun androidx.compose.foundation.layout.BoxScope.DirectionChip(dir: Direc
     }
 }
 
-/** 相手を待っている子: 白いマスに動物の色の縁取り。顔がふわふわ揺れ、3Dのハートを浮かべている。 */
+/** 相手を待っている子: 白いマスに動物の色の縁取り。顔がふわふわ揺れ、3Dのハートを浮かべている。出会いの演出中(meeting)は顔とハートを隠す。 */
 @Composable
-private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerShape, onClick: () -> Unit) {
+private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerShape, meeting: Boolean, onClick: () -> Unit) {
     val color = tile.color.toComposeColor()
     val transition = rememberInfiniteTransition(label = "waiting")
     val bob by transition.animateFloat(
@@ -218,6 +225,7 @@ private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerSha
         onClick = onClick,
         modifier = Modifier.fillMaxSize(),
     ) {
+        if (meeting) return@ChunkySurface
         Image(
             painterResource(tile.color.animalRes()),
             contentDescription = null,

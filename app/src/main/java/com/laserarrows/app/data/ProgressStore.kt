@@ -39,6 +39,7 @@ class ProgressStore(private val context: Context) {
     private val levelStarsKey = stringPreferencesKey("level_stars")
     private val forestPopulationKey = intPreferencesKey("forest_population")
     private val eggIntroSeenKey = booleanPreferencesKey("egg_intro_seen")
+    private val forestStageSeenKey = intPreferencesKey("forest_stage_seen")
     private val activeRunKey = stringPreferencesKey("active_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
     private val favoriteSortKeyKey = stringPreferencesKey("favorite_sort_key")
@@ -142,6 +143,13 @@ class ProgressStore(private val context: Context) {
     suspend fun addForestPopulation(babies: Int) {
         if (babies <= 0) return
         context.progressDataStore.edit { prefs -> prefs[forestPopulationKey] = (prefs[forestPopulationKey] ?: 0) + babies }
+    }
+
+    /** タイトルの森の段階を、どこまで見届けたか(段階が上がった時の「にぎやかになった!」を一度だけ見せるため)。未記録は-1。 */
+    val forestStageSeen: Flow<Int> = context.progressDataStore.data.map { prefs -> prefs[forestStageSeenKey] ?: -1 }
+
+    suspend fun saveForestStageSeen(level: Int) {
+        context.progressDataStore.edit { prefs -> prefs[forestStageSeenKey] = level }
     }
 
     /** 「なぞのたまご」の説明を一度見たか。 */
