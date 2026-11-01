@@ -37,10 +37,16 @@ fun Toolbar(
     onUndo: () -> Unit,
     onRestartLevel: () -> Unit,
     onToggleAddLight: () -> Unit,
-    onShare: () -> Unit,
+    /** ヒント(ハート1つで最高点になる次の1手を教える)を押せるか。 */
+    hintEnabled: Boolean,
+    hintLoading: Boolean,
+    onHint: () -> Unit,
+    /** 今の盤面がもうお気に入りに入っているか(入っていれば「登録済み」にして押せなくする)。 */
+    favoriteDone: Boolean,
+    onFavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ToolbarButton(
             icon = R.drawable.icon_back,
             label = "戻す",
@@ -67,11 +73,20 @@ fun Toolbar(
             modifier = Modifier.weight(1f),
         )
         ToolbarButton(
-            icon = R.drawable.icon_link,
-            label = "共有",
+            icon = R.drawable.icon_bulb,
+            label = if (hintLoading) "考え中…" else "ヒント",
+            cost = 1,
+            enabled = hintEnabled,
+            onClick = onHint,
+            modifier = Modifier.weight(1f),
+        )
+        // プレイ中は共有ではなくお気に入り登録(共有はお気に入り画面の各盤面からできる)。
+        ToolbarButton(
+            icon = R.drawable.icon_bookmark,
+            label = if (favoriteDone) "登録済み" else "お気に入り",
             cost = 0,
-            enabled = true,
-            onClick = onShare,
+            enabled = !favoriteDone,
+            onClick = onFavorite,
             modifier = Modifier.weight(1f),
         )
     }
@@ -100,10 +115,18 @@ private fun ToolbarButton(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+            modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
         ) {
             Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(26.dp))
-            Text(label, fontSize = 12.sp, fontWeight = FontWeight.Black, color = if (active) Color.White else TextPrimary)
+            // 5つ並ぶと幅が狭いので、ラベルは折り返さず1行に収める。
+            Text(
+                label,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Black,
+                color = if (active) Color.White else TextPrimary,
+                maxLines = 1,
+                softWrap = false,
+            )
             // ライフを使う操作は、ハートのコストを小さく添える。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (cost > 0) {

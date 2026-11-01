@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.update
 
+import com.laserarrows.app.ui.components.CenteredScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,19 +52,20 @@ fun AppUpdateOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0x993B2414)),
-                contentAlignment = Alignment.Center,
             ) {
-                GlassSurface(shape = RoundedCornerShape(20.dp)) {
-                    Column(
-                        modifier = Modifier.widthIn(max = 320.dp).padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text("🚀 新しいバージョンがあります", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("更新しますか？", fontSize = 13.sp, color = TextMuted)
-                        NeonButton("更新する", onClick = onUpdateClick, modifier = Modifier.fillMaxWidth())
-                        GhostButton("🛒 ストアで開く", onClick = onOpenStoreClick, modifier = Modifier.fillMaxWidth())
-                        GhostButton("あとで", onClick = onDismiss, modifier = Modifier.fillMaxWidth())
+                CenteredScroll(modifier = Modifier.fillMaxSize()) {
+                    GlassSurface(shape = RoundedCornerShape(20.dp)) {
+                        Column(
+                            modifier = Modifier.widthIn(max = 320.dp).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text("🚀 新しいバージョンがあります", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("更新しますか？", fontSize = 13.sp, color = TextMuted)
+                            NeonButton("更新する", onClick = onUpdateClick, modifier = Modifier.fillMaxWidth())
+                            GhostButton("🛒 ストアで開く", onClick = onOpenStoreClick, modifier = Modifier.fillMaxWidth())
+                            GhostButton("あとで", onClick = onDismiss, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 }
             }

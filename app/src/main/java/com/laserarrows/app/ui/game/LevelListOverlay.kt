@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.CenteredScroll
 import com.laserarrows.app.ui.theme.WoodDark
 import com.laserarrows.app.ui.theme.Neon1Edge
 import com.laserarrows.app.ui.components.GameText
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.laserarrows.app.ui.components.AdaptiveScreen
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.DangerColor
@@ -105,69 +107,66 @@ fun LevelListOverlay(
                 ),
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Column(horizontalAlignment = Alignment.Start) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(R.drawable.icon_scroll), contentDescription = null, modifier = Modifier.size(40.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    GameText("レベル一覧", fontSize = 28.sp, color = TextPrimary, textAlign = TextAlign.Start)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "次の一手を選ぶたび、少しだけ未来が開いていく。",
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                    textAlign = TextAlign.Start,
-                )
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable(onClick = onToggleSort)
-                        .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
-                        .border(1.dp, Neon2, RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
+        AdaptiveScreen(
+            header = {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(painterResource(R.drawable.icon_scroll), contentDescription = null, modifier = Modifier.size(40.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        GameText("レベル一覧", fontSize = 28.sp, color = TextPrimary, textAlign = TextAlign.Start)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        if (sortDescending) "⬇ 新しい順" else "⬆ 古い順",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Neon2,
+                        "次の一手を選ぶたび、少しだけ未来が開いていく。",
+                        fontSize = 13.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Start,
                     )
                 }
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { excludePerfect = !excludePerfect }
-                        .background(
-                            if (excludePerfect) GoldColor.copy(alpha = 0.18f) else Color.Transparent,
-                            RoundedCornerShape(999.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable(onClick = onToggleSort)
+                            .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
+                            .border(1.dp, Neon2, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            if (sortDescending) "⬇ 新しい順" else "⬆ 古い順",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Neon2,
                         )
-                        .border(1.dp, if (excludePerfect) GoldColor else GlassBorder, RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    Text(
-                        "✨ パーフェクトを除外",
-                        fontSize = 12.sp,
-                        fontWeight = if (excludePerfect) FontWeight.Bold else FontWeight.Normal,
-                        color = if (excludePerfect) GoldColor else TextMuted,
-                    )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { excludePerfect = !excludePerfect }
+                            .background(
+                                if (excludePerfect) GoldColor.copy(alpha = 0.18f) else Color.Transparent,
+                                RoundedCornerShape(999.dp),
+                            )
+                            .border(1.dp, if (excludePerfect) GoldColor else GlassBorder, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            "✨ パーフェクトを除外",
+                            fontSize = 12.sp,
+                            fontWeight = if (excludePerfect) FontWeight.Bold else FontWeight.Normal,
+                            color = if (excludePerfect) GoldColor else TextMuted,
+                        )
+                    }
                 }
-            }
-
+            },
+            footer = { GhostButton("戻る", onClick = onBack, modifier = Modifier.fillMaxWidth()) },
+        ) { modifier ->
             LazyColumn(
-                modifier = Modifier.weight(1f).widthIn(max = 360.dp),
+                modifier = modifier.widthIn(max = 420.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 constellations.forEach { (index, levels) ->
@@ -196,8 +195,6 @@ fun LevelListOverlay(
                     }
                 }
             }
-
-            GhostButton("戻る", onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
 
         confirmingLevel?.let { lv ->
@@ -205,34 +202,35 @@ fun LevelListOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0x993B2414)),
-                contentAlignment = Alignment.Center,
             ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 300.dp)
-                        .background(GlassFill, RoundedCornerShape(20.dp))
-                        .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("Lv.$lv に挑戦しますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text(
-                        "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
-                        fontSize = 12.5.sp,
-                        color = TextMuted,
-                        textAlign = TextAlign.Center,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GhostButton("キャンセル", onClick = { confirmingLevel = null }, modifier = Modifier.weight(1f))
-                        GhostButton(
-                            "挑戦する",
-                            onClick = {
-                                onSelectLevel(lv)
-                                confirmingLevel = null
-                            },
-                            modifier = Modifier.weight(1f),
+                CenteredScroll(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 300.dp)
+                            .background(GlassFill, RoundedCornerShape(20.dp))
+                            .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("Lv.$lv に挑戦しますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(
+                            "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
+                            fontSize = 12.5.sp,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center,
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GhostButton("キャンセル", onClick = { confirmingLevel = null }, modifier = Modifier.weight(1f))
+                            GhostButton(
+                                "挑戦する",
+                                onClick = {
+                                    onSelectLevel(lv)
+                                    confirmingLevel = null
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
                 }
             }

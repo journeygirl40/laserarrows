@@ -1,7 +1,7 @@
 package com.laserarrows.app.ui.game
 
-import com.laserarrows.app.ui.theme.animalRes
-import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.PaddingValues
+import com.laserarrows.app.ui.theme.animalPainter
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
+import com.laserarrows.app.ui.components.AdaptiveScreen
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.GlassSurface
 import com.laserarrows.app.ui.components.HomeIconButton
@@ -59,93 +60,99 @@ fun EditorScreen(
 ) {
     val board = editorState.board
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-            .safeDrawingPadding()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeIconButton(onClick = onBack)
-            Text(
-                "🛠 エディタ",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            SizeStepper(
-                label = "行",
-                value = board.rows,
-                onDec = { onSetSize(board.rows - 1, board.cols) },
-                onInc = { onSetSize(board.rows + 1, board.cols) },
-            )
-            SizeStepper(
-                label = "列",
-                value = board.cols,
-                onDec = { onSetSize(board.rows, board.cols - 1) },
-                onInc = { onSetSize(board.rows, board.cols + 1) },
-            )
-        }
+    AdaptiveScreen(
+        modifier = modifier,
+        portraitPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        spacing = 10.dp,
+        sideWidth = 380.dp,
+        header = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HomeIconButton(onClick = onBack)
+                Text(
+                    "🛠 エディタ",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                SizeStepper(
+                    label = "行",
+                    value = board.rows,
+                    onDec = { onSetSize(board.rows - 1, board.cols) },
+                    onInc = { onSetSize(board.rows + 1, board.cols) },
+                )
+                SizeStepper(
+                    label = "列",
+                    value = board.cols,
+                    onDec = { onSetSize(board.rows, board.cols - 1) },
+                    onInc = { onSetSize(board.rows, board.cols + 1) },
+                )
+            }
 
-        GlassSurface(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ToolChip(
-                        "🧹 消す",
-                        selected = editorState.tool == EditorTool.ERASER,
-                        onClick = { onSelectTool(EditorTool.ERASER) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    ToolChip(
-                        "🏃 走る子",
-                        selected = editorState.tool == EditorTool.SHOOTER,
-                        onClick = { onSelectTool(EditorTool.SHOOTER) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    ToolChip(
-                        "💗 待つ子",
-                        selected = editorState.tool == EditorTool.RECEIVER,
-                        onClick = { onSelectTool(EditorTool.RECEIVER) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    ToolChip(
-                        "🥚 たまご",
-                        selected = editorState.tool == EditorTool.EGG,
-                        onClick = { onSelectTool(EditorTool.EGG) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // たまごは種類を持たないので、動物選びは出さない。
-                if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.RECEIVER) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        LaserColor.entries.forEach { c ->
-                            ColorSwatch(
-                                color = c,
-                                selected = editorState.color == c,
-                                onClick = { onSelectColor(c) },
-                            )
+            GlassSurface(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        ToolChip(
+                            "🧹 消す",
+                            selected = editorState.tool == EditorTool.ERASER,
+                            onClick = { onSelectTool(EditorTool.ERASER) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ToolChip(
+                            "🏃 走る子",
+                            selected = editorState.tool == EditorTool.SHOOTER,
+                            onClick = { onSelectTool(EditorTool.SHOOTER) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ToolChip(
+                            "💗 待つ子",
+                            selected = editorState.tool == EditorTool.RECEIVER,
+                            onClick = { onSelectTool(EditorTool.RECEIVER) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ToolChip(
+                            "🥚 たまご",
+                            selected = editorState.tool == EditorTool.EGG,
+                            onClick = { onSelectTool(EditorTool.EGG) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // たまごは種類を持たないので、動物選びは出さない。
+                    if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.RECEIVER) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LaserColor.entries.forEach { c ->
+                                ColorSwatch(
+                                    color = c,
+                                    selected = editorState.color == c,
+                                    onClick = { onSelectColor(c) },
+                                )
+                            }
                         }
                     }
-                }
-                if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.EGG) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Direction.entries.forEach { d ->
-                            DirChip(
-                                dir = d,
-                                selected = editorState.direction == d,
-                                onClick = { onSelectDirection(d) },
-                            )
+                    if (editorState.tool == EditorTool.SHOOTER || editorState.tool == EditorTool.EGG) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Direction.entries.forEach { d ->
+                                DirChip(
+                                    dir = d,
+                                    selected = editorState.direction == d,
+                                    onClick = { onSelectDirection(d) },
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-
+        },
+        footer = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                GhostButton("🗑 全消し", onClick = onClearAll, modifier = Modifier.weight(1f))
+                NeonButton("▶ テスト", onClick = onTestPlay, modifier = Modifier.weight(1f))
+            }
+            GhostButton("🔗 共有", onClick = onShare, modifier = Modifier.fillMaxWidth())
+        },
+    ) { boardModifier ->
         Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = boardModifier,
             contentAlignment = Alignment.Center,
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -155,7 +162,7 @@ fun EditorScreen(
                 val availH = maxHeight - marginDp * 2
                 val cellFromW = (availW - gapDp * (board.cols - 1)) / board.cols
                 val cellFromH = (availH - gapDp * (board.rows - 1)) / board.rows
-                val cellSizeDp = if (cellFromW < cellFromH) cellFromW else cellFromH
+                val cellSizeDp = (if (cellFromW < cellFromH) cellFromW else cellFromH).coerceAtLeast(0.dp) // 画面がとても小さい時にマイナスにならないように
                 val boardWidthDp = cellSizeDp * board.cols + gapDp * (board.cols - 1)
                 val boardHeightDp = cellSizeDp * board.rows + gapDp * (board.rows - 1)
 
@@ -178,12 +185,6 @@ fun EditorScreen(
                 }
             }
         }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            GhostButton("🗑 全消し", onClick = onClearAll, modifier = Modifier.weight(1f))
-            NeonButton("▶ テスト", onClick = onTestPlay, modifier = Modifier.weight(1f))
-        }
-        GhostButton("🔗 共有", onClick = onShare, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -238,7 +239,7 @@ private fun ColorSwatch(color: LaserColor, selected: Boolean, onClick: () -> Uni
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(28.dp))
+        Image(animalPainter(color), contentDescription = null, modifier = Modifier.size(28.dp))
     }
 }
 

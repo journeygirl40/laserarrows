@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.animalBitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.LinearEasing
@@ -30,7 +31,6 @@ import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.LaserColor
 import com.laserarrows.app.ui.theme.EggTrail
 import com.laserarrows.app.ui.theme.RoundedFontFamily
-import com.laserarrows.app.ui.theme.animalRes
 import com.laserarrows.app.ui.theme.toComposeColor
 import kotlin.math.PI
 import kotlin.math.abs
@@ -91,7 +91,7 @@ fun BeamCanvas(
         }
     }
     val loveHearts = remember(shot?.token) { randomLoveHearts(shot?.token ?: 0L) }
-    val animalArt = LaserColor.entries.associateWith { ImageBitmap.imageResource(it.animalRes()) }
+    val animalArt = LaserColor.entries.associateWith { animalBitmap(it) }
     val eggArt = ImageBitmap.imageResource(R.drawable.icon_egg)
     val heartArt = ImageBitmap.imageResource(R.drawable.icon_heart)
     // ビームの先端が伸びていく間、後方にこぼれ落ちる火花(花火のロケット軌道のような質感)。

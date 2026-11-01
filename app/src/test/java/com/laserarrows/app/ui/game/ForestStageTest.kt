@@ -13,11 +13,16 @@ class ForestStageTest {
     }
 
     @Test
-    fun stageForScoreUsesThresholds() {
+    fun stageForStarsUsesThresholds() {
+        // にぎわいは集めた★の数で育つ。
         assertEquals(0, ForestStage.of(0).level)
         assertEquals(1, ForestStage.of(1).level)
-        assertEquals(1, ForestStage.of(49).level)
-        assertEquals(2, ForestStage.of(50).level)
+        assertEquals(1, ForestStage.of(9).level)
+        assertEquals(2, ForestStage.of(10).level)
+        // 全部★3で進んだ時の目安: Lv.10(30個)で3段目、Lv.30(90個)で5段目、Lv.80(240個)で最後の段。
+        assertEquals(3, ForestStage.of(30).level)
+        assertEquals(5, ForestStage.of(90).level)
+        assertEquals(7, ForestStage.of(240).level)
         assertEquals(7, ForestStage.of(1_000_000).level)
     }
 

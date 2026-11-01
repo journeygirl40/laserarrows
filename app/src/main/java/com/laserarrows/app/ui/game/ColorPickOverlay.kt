@@ -1,7 +1,6 @@
 package com.laserarrows.app.ui.game
 
-import com.laserarrows.app.ui.theme.animalRes
-import androidx.compose.ui.res.painterResource
+import com.laserarrows.app.ui.theme.animalPainter
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,7 +64,7 @@ fun ColorPickOverlay(
                         .clickable { onPick(color) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(38.dp))
+                    Image(animalPainter(color), contentDescription = null, modifier = Modifier.size(38.dp))
                 }
             }
         }

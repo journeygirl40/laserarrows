@@ -95,7 +95,7 @@ private val SLEEPERS = listOf(
     Resident(R.drawable.animal_rabbit, 0.62f, 0.6f, 52f, 0, Habit.SLEEP, 1.6f),
 )
 
-/** ホームの森で何が育ったのか。LIVELY=にぎわい(ハイスコア)、WIDE=広さ(森のなかまの累計)。 */
+/** ホームの森で何が育ったのか。LIVELY=にぎわい(集めた★)、WIDE=広さ(森のなかまの累計)。 */
 enum class ForestGrowth { LIVELY, WIDE }
 
 /** ホームで一度だけ見せる「森が育った」お祝い。fromからtoまでの段階で増えたものがポンと現れる。 */
@@ -112,7 +112,7 @@ private val FLAG_COLORS = listOf(Color(0xFFFF6F61), Color(0xFFFFC84A), Color(0xF
 
 /**
  * タイトルの森のジオラマ。2つの軸で育つ。
- * - にぎわい(level=[ForestStage]、ハイスコア): 住人が増え、動きも大きく速く(=元気に)なる。
+ * - にぎわい(level=[ForestStage]、集めた★の数): 住人が増え、動きも大きく速く(=元気に)なる。
  * - 広さ(expansion=[ForestExpansion]、森のなかまの累計): 丘が広がり、花畑・小川・橋・池・おうち・ツリーハウス・ホタル・虹が増える。
  * 段階が上がった直後(celebration)は、増えたものがポンと現れ、ハートが弾けて「にぎやかになった!/広がった!」と知らせる。
  */
@@ -200,11 +200,12 @@ fun TitleForest(level: Int, expansion: Int, celebration: ForestCelebration?, mod
 }
 
 /**
- * タイトル下の森の育ち具合の札。上段=にぎわい(ハイスコアで育つ)、下段=広さ(森のなかまの累計で育つ)。
+ * タイトル下の森の育ち具合の札。上段=集めた★の数(にぎわい)、下段=集めたなかまの累計(広さ)。
  * それぞれ次の段階まであと何匹かを見せ、どのモードを遊べば何が育つのかが一目でわかるようにする。
+ * 「Lv.」はレベル(盤面の番号)だけに使うので、ここでは段階を番号では呼ばず、森の名前だけで見せる。
  */
 @Composable
-fun ForestProgressPill(bestScore: Int, population: Int, modifier: Modifier = Modifier) {
+fun ForestProgressPill(totalStars: Int, population: Int, modifier: Modifier = Modifier) {
     Column(
         verticalArrangement = Arrangement.spacedBy(5.dp),
         modifier = modifier
@@ -212,25 +213,26 @@ fun ForestProgressPill(bestScore: Int, population: Int, modifier: Modifier = Mod
             .background(GlassFill.copy(alpha = 0.88f), RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 7.dp),
     ) {
-        val lively = ForestStage.of(bestScore)
+        val lively = ForestStage.of(totalStars)
         ForestGrowthRow(
-            title = "🎉 にぎわい Lv.${lively.level}「${lively.name}」",
-            hint = "ハイスコアで育つ",
-            value = bestScore,
+            title = "🎉 集めた★の数",
+            hint = "「${lively.name}」",
+            value = totalStars,
             stage = lively,
             next = ForestStage.next(lively),
-            unit = "ハイスコア",
+            amount = { "★$it" },
             color = GoldColor,
             done = "いちばんにぎやかな森になりました!",
         )
         val wide = ForestExpansion.of(population)
         ForestGrowthRow(
-            title = "🌳 広さ Lv.${wide.level}「${wide.name}」",
-            hint = "クリアするたび育つ",
+            title = "🌳 集めたなかまの累計",
+            hint = "「${wide.name}」",
             value = population,
             stage = wide,
             next = ForestExpansion.next(wide),
-            unit = "なかま",
+            amount = { "${it}匹" },
+            valueLabel = "累計",
             color = ForestGreen,
             done = "いちばん広い森になりました!",
         )
@@ -244,18 +246,21 @@ private fun ForestGrowthRow(
     value: Int,
     stage: ForestStage.Stage,
     next: ForestStage.Stage?,
-    unit: String,
+    /** 数の見せ方(★12 / 12匹)。 */
+    amount: (Int) -> String,
     color: Color,
     done: String,
+    /** 今の値の前に付ける言葉(累計12匹)。 */
+    valueLabel: String = "",
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = TextPrimary, modifier = Modifier.weight(1f))
-            Text(hint, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+            Text(hint, fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = TextMuted)
         }
         if (next != null) {
             ForestProgressBar(((value - stage.minScore).toFloat() / (next.minScore - stage.minScore)).coerceIn(0f, 1f), color)
-            Text("${unit}${value}匹 ・ あと${next.minScore - value}匹で「${next.name}」に", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+            Text("$valueLabel${amount(value)} ・ あと${amount(next.minScore - value)}で「${next.name}」に", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
         } else {
             Text(done, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = GoldText)
         }

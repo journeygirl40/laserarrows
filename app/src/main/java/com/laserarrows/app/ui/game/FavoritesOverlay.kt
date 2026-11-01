@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.CenteredScroll
 import com.laserarrows.app.ui.theme.BoardGrass
 import com.laserarrows.app.ui.theme.CardEdge
 import androidx.compose.ui.draw.shadow
@@ -45,6 +46,7 @@ import com.laserarrows.app.data.FavoriteSortKey
 import com.laserarrows.app.data.ImportHistoryEntry
 import com.laserarrows.app.engine.BoardCode
 import com.laserarrows.app.engine.PuzzleGenerator
+import com.laserarrows.app.ui.components.AdaptiveScreen
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.theme.GlassFill
@@ -106,32 +108,66 @@ fun FavoritesOverlay(
                 ),
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Column(horizontalAlignment = Alignment.Start) {
-                Text("⭐ お気に入り", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "気に入ったパズルをいつでも呼び出せる、あなただけのコレクション。",
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                    textAlign = TextAlign.Start,
-                )
-            }
+        val sortedHistory = remember(history, sortKey, sortDescending) {
+            sortFavorites(history, sortKey, sortDescending)
+        }
 
-            NeonButton("＋ 新しいコードを追加", onClick = onAddNew, modifier = Modifier.fillMaxWidth())
+        AdaptiveScreen(
+            sideWidth = 340.dp,
+            header = {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text("⭐ お気に入り", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "気に入ったパズルをいつでも呼び出せる、あなただけのコレクション。",
+                        fontSize = 13.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Start,
+                    )
+                }
 
-            val sortedHistory = remember(history, sortKey, sortDescending) {
-                sortFavorites(history, sortKey, sortDescending)
-            }
+                NeonButton("＋ 新しいコードを追加", onClick = onAddNew, modifier = Modifier.fillMaxWidth())
 
+                if (history.isNotEmpty()) {
+                    Text(
+                        "タップするとその盤面をもう一度プレイできます",
+                        fontSize = 12.5.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Start,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        SortKeyChip("🗓 日付", sortKey == FavoriteSortKey.DATE) { onSetSortKey(FavoriteSortKey.DATE) }
+                        SortKeyChip("🎯 レベル", sortKey == FavoriteSortKey.LEVEL) { onSetSortKey(FavoriteSortKey.LEVEL) }
+                        SortKeyChip("💔 消費ハート", sortKey == FavoriteSortKey.LIVES_LOST) { onSetSortKey(FavoriteSortKey.LIVES_LOST) }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { onSetSortDescending(!sortDescending) }
+                            .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
+                            .border(1.dp, Neon2, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(sortDirectionLabel(sortKey, sortDescending), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Neon2)
+                    }
+                }
+            },
+            footer = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    GhostButton(
+                        text = "📤 全て書き出す",
+                        onClick = onExportAll,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GhostButton("戻る", onClick = onBack, modifier = Modifier.weight(1f))
+                }
+            },
+        ) { modifier ->
             if (history.isEmpty()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(modifier = modifier, contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🌟", fontSize = 36.sp)
                         Spacer(modifier = Modifier.height(8.dp))
@@ -151,29 +187,8 @@ fun FavoritesOverlay(
                     }
                 }
             } else {
-                Text(
-                    "タップするとその盤面をもう一度プレイできます",
-                    fontSize = 12.5.sp,
-                    color = TextMuted,
-                    textAlign = TextAlign.Start,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                    SortKeyChip("🗓 日付", sortKey == FavoriteSortKey.DATE) { onSetSortKey(FavoriteSortKey.DATE) }
-                    SortKeyChip("🎯 レベル", sortKey == FavoriteSortKey.LEVEL) { onSetSortKey(FavoriteSortKey.LEVEL) }
-                    SortKeyChip("💔 消費ハート", sortKey == FavoriteSortKey.LIVES_LOST) { onSetSortKey(FavoriteSortKey.LIVES_LOST) }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { onSetSortDescending(!sortDescending) }
-                        .background(Neon2.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
-                        .border(1.dp, Neon2, RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    Text(sortDirectionLabel(sortKey, sortDescending), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Neon2)
-                }
                 LazyColumn(
-                    modifier = Modifier.weight(1f).widthIn(max = 360.dp),
+                    modifier = modifier.widthIn(max = 420.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(sortedHistory, key = { it.importedAt }) { entry ->
@@ -190,18 +205,6 @@ fun FavoritesOverlay(
                     }
                 }
             }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                GhostButton(
-                    text = "📤 全て書き出す",
-                    onClick = onExportAll,
-                    modifier = Modifier.weight(1f),
-                )
-                GhostButton("戻る", onClick = onBack, modifier = Modifier.weight(1f))
-            }
         }
 
         confirmingEntry?.let { entry ->
@@ -209,34 +212,35 @@ fun FavoritesOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0x993B2414)),
-                contentAlignment = Alignment.Center,
             ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 300.dp)
-                        .background(GlassFill, RoundedCornerShape(20.dp))
-                        .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("このお気に入りをプレイしますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text(
-                        "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
-                        fontSize = 12.5.sp,
-                        color = TextMuted,
-                        textAlign = TextAlign.Center,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GhostButton("キャンセル", onClick = { confirmingEntry = null }, modifier = Modifier.weight(1f))
-                        GhostButton(
-                            "プレイする",
-                            onClick = {
-                                onSelect(entry)
-                                confirmingEntry = null
-                            },
-                            modifier = Modifier.weight(1f),
+                CenteredScroll(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 300.dp)
+                            .background(GlassFill, RoundedCornerShape(20.dp))
+                            .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("このお気に入りをプレイしますか？", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(
+                            "現在プレイ中のLv.${activeLevel}の進行状況は消えます。",
+                            fontSize = 12.5.sp,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center,
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GhostButton("キャンセル", onClick = { confirmingEntry = null }, modifier = Modifier.weight(1f))
+                            GhostButton(
+                                "プレイする",
+                                onClick = {
+                                    onSelect(entry)
+                                    confirmingEntry = null
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
                 }
             }

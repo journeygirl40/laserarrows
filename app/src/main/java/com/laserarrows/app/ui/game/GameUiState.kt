@@ -3,6 +3,7 @@ package com.laserarrows.app.ui.game
 import com.laserarrows.app.data.FavoriteSortKey
 import com.laserarrows.app.data.ImportHistoryEntry
 import com.laserarrows.app.engine.Board
+import com.laserarrows.app.engine.BoardCode
 import com.laserarrows.app.engine.CellPos
 import com.laserarrows.app.engine.Direction
 import com.laserarrows.app.engine.LaserColor
@@ -78,6 +79,18 @@ data class HighScorePopup(val score: Int, val token: Long = 0L)
 /** プレイ中、これまでの最深到達レベルを初めて超えた瞬間に一度だけ発火する演出。 */
 data class LevelRecordPopup(val level: Int, val token: Long = 0L)
 
+/**
+ * ヒント: ハートを1つ使って教えてもらった「最高点になる次の1手」。
+ * board=教えてもらった時の盤面。盤面が変わったら(どこかを撃つ・戻す・やり直す等)表示しない。
+ */
+data class HintMove(
+    val board: Board,
+    val origin: CellPos,
+    val result: LaserResult,
+    val gained: Int,
+    val token: Long,
+)
+
 enum class EditorTool { ERASER, SHOOTER, RECEIVER, EGG }
 
 data class EditorState(
@@ -151,8 +164,23 @@ data class GameUiState(
     /** テストプレイに入る前の本来のラン。テストを抜けたタイミングで復元する。 */
     val savedRun: SavedRun? = null,
     val editorState: EditorState = EditorState(),
+    /** 最後に教えてもらったヒント(表示するのは、今の盤面がその時のままの間だけ)。 */
+    val hint: HintMove? = null,
+    /** ヒントを計算している最中か。 */
+    val hintLoading: Boolean = false,
 ) {
+    /** 今の盤面に対するヒント(盤面が変わっていればnull)。 */
+    val shownHint: HintMove? get() = hint?.takeIf { it.board == board }
+
     val totalStars: Int get() = levelStars.values.sum()
+
+    /** 今のレベルの盤面(始まった時の状態)が、もうお気に入りに入っているか。 */
+    val isCurrentBoardFavorite: Boolean
+        get() {
+            val board = levelSnapshot?.board ?: return false
+            val code = BoardCode.encode(board)
+            return importHistory.any { it.code == code }
+        }
 
     /** このレベルに入ってから稼いだ点(★判定に使う)。 */
     val levelScore: Int get() = score - (levelSnapshot?.score ?: 0)

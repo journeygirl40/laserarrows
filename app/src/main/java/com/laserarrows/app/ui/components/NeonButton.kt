@@ -117,6 +117,8 @@ fun GhostButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** 補助のボタンとして小さめに(文字と左右の余白を詰めて、狭い所でも1行に収める)。 */
+    compact: Boolean = false,
 ) {
     ChunkySurface(
         face = GlassFill,
@@ -131,9 +133,10 @@ fun GhostButton(
             text = text,
             color = TextPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
+            fontSize = if (compact) 13.sp else 14.sp,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
+            maxLines = if (compact) 1 else Int.MAX_VALUE,
+            modifier = Modifier.padding(horizontal = if (compact) 8.dp else 20.dp, vertical = if (compact) 9.dp else 11.dp),
         )
     }
 }

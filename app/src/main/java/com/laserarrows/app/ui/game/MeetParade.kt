@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.animalPainter
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -56,7 +57,6 @@ import com.laserarrows.app.ui.theme.GoldText
 import com.laserarrows.app.ui.theme.TextMuted
 import com.laserarrows.app.ui.theme.TextPrimary
 import com.laserarrows.app.ui.theme.WoodDark
-import com.laserarrows.app.ui.theme.animalRes
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -67,6 +67,7 @@ import kotlinx.coroutines.launch
 /**
  * クリア画面の下(ツールバーの場所)に出る、このステージで出会えたふたり組のパレード。
  * 1組ずつ「ポン」と現れ、左の数が数え上がっていく。盤面やボタンには重ならない。
+ * それぞれの組の下には、その出会いで増えたなかまの数(+3など)を札で出す。大きな出会い(5匹以上)は金色で目立たせる。
  * ★が多い(高得点な)ほど盛り上がる: ★1はそっと並ぶだけ、★2はそろって弾み、
  * ★3は波のように踊って帯が金色にきらめき、ハートがたくさん舞い上がる。
  */
@@ -165,20 +166,24 @@ fun MeetParade(
                 // 組が多い時は2段に並べ、1組の大きさを帯に収まるよう縮める。
                 val rows = if (n > 7) 2 else 1
                 val perRow = ceil(n / rows.toFloat()).toInt().coerceAtLeast(1)
-                val face = minOf(30.dp, maxWidth / (perRow * 1.95f), maxHeight / (rows * 1.45f))
+                // 1組の高さ = 顔(1.3) + 下の得点札(0.6) + すき間。
+                val face = minOf(30.dp, maxWidth / (perRow * 1.95f), maxHeight / (rows * 2.05f))
                 Column(verticalArrangement = Arrangement.spacedBy(face * 0.1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     couples.chunked(perRow).forEachIndexed { r, line ->
                         Row(horizontalArrangement = Arrangement.spacedBy(face * 0.2f)) {
                             line.forEachIndexed { k, couple ->
                                 val i = r * perRow + k
                                 val wave = sin(2f * PI.toFloat() * (beat + i * 0.09f))
-                                CoupleSprite(
-                                    couple = couple,
-                                    face = face,
-                                    appear = appear[i].value,
-                                    lift = if (allIn) (danceAmp * abs(wave)).dp else 0.dp,
-                                    sway = if (allIn && tier == 3) wave * 8f else 0f,
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CoupleSprite(
+                                        couple = couple,
+                                        face = face,
+                                        appear = appear[i].value,
+                                        lift = if (allIn) (danceAmp * abs(wave)).dp else 0.dp,
+                                        sway = if (allIn && tier == 3) wave * 8f else 0f,
+                                    )
+                                    GainTag(gained = couple.gained, face = face, appear = appear[i].value)
+                                }
                             }
                         }
                     }
@@ -207,10 +212,37 @@ fun MeetParade(
     }
 }
 
+/** その出会いで増えたなかまの数の札。組と一緒にポンと現れる。5匹以上の大きな出会いは金色。 */
+@Composable
+private fun GainTag(gained: Int, face: Dp, appear: Float) {
+    val big = gained >= BIG_GAIN
+    Text(
+        "+$gained",
+        fontSize = (face.value * 0.46f).coerceAtLeast(9f).sp,
+        lineHeight = (face.value * 0.5f).coerceAtLeast(10f).sp,
+        fontWeight = FontWeight.Black,
+        color = Color.White,
+        maxLines = 1,
+        modifier = Modifier
+            .padding(top = face * 0.06f)
+            .graphicsLayer {
+                scaleX = appear
+                scaleY = appear
+                alpha = appear.coerceIn(0f, 1f)
+            }
+            .background(if (big) GoldColor else LovePink, RoundedCornerShape(999.dp))
+            .border(1.dp, Color.White, RoundedCornerShape(999.dp))
+            .padding(horizontal = face * 0.2f),
+    )
+}
+
+/** これ以上増えた出会いは、得点札を金色にして目立たせる。 */
+private const val BIG_GAIN = 5
+
 /** 出会えたふたり組: 同じ動物が寄り添って頭を傾け合い、間に小さなハート。たまご生まれの子は一回り小さな赤ちゃん。 */
 @Composable
 private fun CoupleSprite(couple: ClearCouple, face: Dp, appear: Float, lift: Dp, sway: Float) {
-    val art = painterResource(couple.color.animalRes())
+    val art = animalPainter(couple.color)
     Box(
         modifier = Modifier
             .width(face * 1.75f)

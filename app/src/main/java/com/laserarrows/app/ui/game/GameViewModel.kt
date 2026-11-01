@@ -23,6 +23,7 @@ import com.laserarrows.app.engine.PuzzleGenerator
 import com.laserarrows.app.engine.ReplayEngine
 import com.laserarrows.app.engine.ScoreRules
 import com.laserarrows.app.engine.Tile
+import com.laserarrows.app.ui.theme.AnimalCatalog
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -71,6 +73,20 @@ class GameViewModel(
                     )
                 }
                 refreshPar()
+            } else {
+                // クリア画面のまま閉じていた場合は、クリア画面で「ホームへ」を押した時と同じく、
+                // スコア・ライフを引き継いだ次のレベルを用意して、ホームの「続きから」で再開できるようにする。
+                progressStore.loadClearedRun()?.let { decodeClearedRun(it) }?.let { cleared ->
+                    // 起動直後はまだ記録の読み込みが終わっていないことがあるので、次のレベルの用意に使う記録は先に読んでおく
+                    // (到達レベル記録の更新や、たまご・なかまの増え方の説明を、誤って出さないように)。
+                    val reached = progressStore.bestLevelReached.first()
+                    val eggSeen = progressStore.eggIntroSeen.first()
+                    val helpSeen = progressStore.scoreHelpSeen.first()
+                    _uiState.update {
+                        cleared.applyTo(it).copy(bestLevelReached = reached, eggIntroSeen = eggSeen, scoreHelpSeen = helpSeen)
+                    }
+                    startLevel(targetOverlay = Overlay.Home)
+                }
             }
             // プレイ中の盤面・ライフ・スコア等を都度保存し、アプリのプロセスが落ちても「再開する」で復元できるようにする。
             // 復元処理より前に監視を始めると、復元前の初期状態を保存して既存のデータを消してしまうため、必ず復元後に開始する。
@@ -122,9 +138,10 @@ class GameViewModel(
             }
         }
         viewModelScope.launch {
-            progressStore.best.combine(progressStore.forestStageSeen) { best, seen -> best.score to seen }.collect { (score, seen) ->
-                val current = ForestStage.of(score).level
-                // この機能が入る前から遊んでいた人は、今の段階を「見届け済み」から始める(起動直後にいきなり祝わない)。
+            progressStore.levelStars.combine(progressStore.forestStageSeen) { stars, seen -> stars.values.sum() to seen }.collect { (totalStars, seen) ->
+                val current = ForestStage.of(totalStars).level
+                // まだ記録が無い人(この機能が入る前・にぎわいを★で数えるようになる前から遊んでいた人)は、
+                // 今の段階を「見届け済み」から始める(起動直後にいきなり祝ったり、段階が下がったように見せたりしない)。
                 if (seen < 0) progressStore.saveForestStageSeen(current)
                 _uiState.update { it.copy(forestStageSeen = if (seen < 0) current else seen) }
             }
@@ -258,6 +275,16 @@ class GameViewModel(
     fun favoritesBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
     fun goEditor() = _uiState.update { it.copy(overlay = Overlay.Editor) }
     fun editorBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
+
+    /** どうぶつの設定を開く。Lv.20に到達するまでは鍵がかかっていて開けない。 */
+    fun goAnimals() {
+        if (_uiState.value.bestLevelReached >= AnimalCatalog.SETTINGS_UNLOCK_LEVEL) {
+            _uiState.update { it.copy(overlay = Overlay.Animals) }
+        } else {
+            showToast("🔒 Lv.${AnimalCatalog.SETTINGS_UNLOCK_LEVEL}に到達すると解放されます")
+        }
+    }
+    fun animalsBack() = _uiState.update { it.copy(overlay = Overlay.Home) }
     fun gameOverHome() = _uiState.update {
         when {
             it.isEditorTest -> restoreFromEditorTest(it).copy(overlay = Overlay.Editor)
@@ -325,7 +352,11 @@ class GameViewModel(
     /** ホームから、保持しておいたプレイ中の状態にそのまま戻る。 */
     fun resume() {
         if (!_uiState.value.hasActiveRun) return
-        _uiState.update { it.copy(overlay = Overlay.None) }
+        // ゲームオーバー中のランに戻った時は、ゲームオーバー画面から(広告を見て復活しないと遊べない)。
+        _uiState.update {
+            val overlay = if (it.lives <= 0) Overlay.GameOver(beatBest = it.score >= it.bestScoreAtRunStart) else Overlay.None
+            it.copy(overlay = overlay)
+        }
         // テストプレイ等で計算が中断されたままのランに戻った場合は、パーを計算し直す。
         if (_uiState.value.par == null) refreshPar()
     }
@@ -415,6 +446,8 @@ class GameViewModel(
                     },
                 )
             }
+            // 次のレベル(または新しいラン)が始まったので、クリア画面のまま閉じた時用の記録はもう要らない。
+            progressStore.saveClearedRun(null)
             // 大きな盤面ではパーの探索に時間がかかるため、盤面は先に見せてパーは裏で計算する(HUDは計算中表示)。
             // クリア時に先に計算しておいたパーが、この盤面と開始コンボに合っていればそれを使う。
             val startCombo = _uiState.value.combo
@@ -430,11 +463,6 @@ class GameViewModel(
     }
 
     /** この盤面の初期状態(プレイ開始時点のスナップショット)を共有コードへ変換する(純粋関数、UIで共有シートを呼び出す)。 */
-    fun exportCurrentBoard(): String {
-        val current = _uiState.value
-        return BoardCode.encode(current.levelSnapshot?.board ?: current.board)
-    }
-
     /** 今プレイしていた盤面の初期状態を、コードの貼り付けなしでそのままお気に入りに登録する。
      * クリア画面から登録した場合は、その時のクリア実績(消費ライフ・一手ごとの再生ログ)もあわせて記録し、
      * お気に入り一覧からすぐ振り返れるようにする。 */
@@ -442,10 +470,26 @@ class GameViewModel(
         val current = _uiState.value
         val board = current.levelSnapshot?.board ?: current.board
         val code = BoardCode.encode(board)
-        // お気に入りボタンは実レベルのプレイ後にしか出さないため、current.levelがそのまま盤面の由来レベルになる。
+        // 実レベルの盤面ならcurrent.levelがそのまま由来レベル。お気に入り・自作のテストの盤面(isImported)はレベル不明。
         val level = current.level.takeIf { !current.isImported }
-        val importedAt = System.currentTimeMillis()
         val clearedOverlay = current.overlay as? Overlay.Clear
+        // プレイ中にも登録できるので、同じ盤面がもう入っていれば新しく増やさず、その項目にメモ・クリア記録を書き足す。
+        val existing = current.importHistory.firstOrNull { it.code == code }
+        if (existing != null) {
+            if (clearedOverlay == null && memo.isBlank()) {
+                showToast("⭐ もうお気に入りに入っています")
+                return
+            }
+            viewModelScope.launch {
+                if (memo.isNotBlank()) progressStore.updateImportHistoryMemo(existing.importedAt, memo)
+                if (clearedOverlay != null) {
+                    progressStore.recordFavoriteClear(existing.importedAt, clearedOverlay.livesLost, encodeReplayLog(current.history))
+                }
+            }
+            showToast("⭐ お気に入りを更新しました")
+            return
+        }
+        val importedAt = System.currentTimeMillis()
         viewModelScope.launch {
             progressStore.addImportHistory(code, memo, level, importedAt)
             if (clearedOverlay != null) {
@@ -885,6 +929,57 @@ class GameViewModel(
         }
     }
 
+    /**
+     * ヒント: ハートを1つ使って、今の盤面・コンボから最高点になる「次の1手」を教える(タップする子を光らせ、走る道筋を見せる)。
+     * 戻す・やり直すと同じく最後のハートでも使える。0になったらゲームオーバーになるが、広告で復活すれば
+     * 盤面はそのままなので、ヒントも表示されたまま続けられる。
+     * もう全員は出会えない盤面だった時は、ハートを使わずに「やり直す」をすすめる。
+     */
+    fun useHint() {
+        val current = _uiState.value
+        if (current.busy || current.hintLoading || current.shownHint != null || current.overlay != Overlay.None || current.lives <= 0) return
+        val board = current.board
+        val combo = current.combo
+        _uiState.update { it.copy(hintLoading = true, addingLight = false, pendingLightCell = null) }
+        viewModelScope.launch {
+            val move = withContext(Dispatchers.Default) { ParSolver.bestMove(board, combo) }
+            // 考えている間に盤面が変わっていたら、そのヒントは使わない(ハートも使わない)。
+            if (_uiState.value.board != board) {
+                _uiState.update { it.copy(hintLoading = false) }
+                return@launch
+            }
+            when {
+                move == null -> {
+                    _uiState.update { it.copy(hintLoading = false) }
+                    showToast("今は出会える子がいません。「呼ぶ」か「やり直す」を試してね(ハートは使っていません)")
+                }
+                !move.clearable -> {
+                    _uiState.update { it.copy(hintLoading = false) }
+                    showToast("この盤面はもう全員は出会えません。「やり直す」がおすすめ(ハートは使っていません)")
+                }
+                else -> {
+                    val result = LaserSimulator.fireLaser(board, move.origin)
+                    val newLives = _uiState.value.lives - 1
+                    _uiState.update {
+                        it.copy(
+                            hintLoading = false,
+                            lives = newLives,
+                            hint = HintMove(board, move.origin, result, move.gained, token = System.nanoTime()),
+                        )
+                    }
+                    sfxEngine.playLightPlaced()
+                    showToast(
+                        if (move.gained > 0) "💡 光っている子をタップ！ なかま+${move.gained}匹(💔1)" else "💡 光っている子をタップ！ 道をあけよう(💔1)",
+                    )
+                    if (newLives <= 0) {
+                        delay(700)
+                        gameOver()
+                    }
+                }
+            }
+        }
+    }
+
     fun toggleAddLight() {
         val current = _uiState.value
         if (current.busy || current.lives <= 0) return
@@ -992,7 +1087,9 @@ class GameViewModel(
             .filterIsInstance<HistoryEntry.Shot>()
             .filter { it.wasReceiver }
         val finaleBursts = meetings.map { FinaleBurst(it.removedBPos, it.removedBTile.color) }
-        val couples = meetings.map { ClearCouple(it.removedBTile.color, babyRunner = (it.removedATile as? Tile.Shooter)?.egg == true) }
+        val couples = meetings.map {
+            ClearCouple(it.removedBTile.color, babyRunner = (it.removedATile as? Tile.Shooter)?.egg == true, gained = it.gained)
+        }
         _uiState.update {
             it.copy(
                 score = totalScore,
@@ -1009,6 +1106,62 @@ class GameViewModel(
                 clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,
             )
         }
+        // クリア画面の間はプレイ中のランとして保存されないので、ここで閉じられても次のレベルから続けられるよう別に覚えておく。
+        if (!current.isImported && !current.isEditorTest) {
+            val state = _uiState.value
+            val cleared = ClearedRun(
+                level = state.level,
+                score = state.score,
+                combo = state.combo,
+                lives = state.lives,
+                bestScoreAtRunStart = state.bestScoreAtRunStart,
+                crossedHighScore = state.crossedHighScoreThisRun,
+                crossedLevelRecord = state.crossedLevelRecordThisRun,
+            )
+            viewModelScope.launch { progressStore.saveClearedRun(cleared.encode()) }
+        }
+    }
+
+    /** クリアして、まだ次のレベルへ進んでいないラン(クリア画面のまま閉じた時の再開用)。 */
+    private data class ClearedRun(
+        val level: Int,
+        val score: Int,
+        val combo: Int,
+        val lives: Int,
+        val bestScoreAtRunStart: Int,
+        val crossedHighScore: Boolean,
+        val crossedLevelRecord: Boolean,
+    ) {
+        fun encode(): String = listOf(level, score, combo, lives, bestScoreAtRunStart, crossedHighScore, crossedLevelRecord).joinToString("|")
+
+        /** 次のレベルを始める直前の状態にする(盤面はstartLevelで用意する)。 */
+        fun applyTo(state: GameUiState): GameUiState = state.copy(
+            level = level + 1,
+            score = score,
+            combo = combo,
+            lives = lives,
+            bestScoreAtRunStart = bestScoreAtRunStart,
+            crossedHighScoreThisRun = crossedHighScore,
+            crossedLevelRecordThisRun = crossedLevelRecord,
+            isImported = false,
+            isEditorTest = false,
+            activeFavoriteImportedAt = null,
+            history = emptyList(),
+        )
+    }
+
+    private fun decodeClearedRun(raw: String): ClearedRun? {
+        val f = raw.split("|")
+        if (f.size != 7) return null
+        return ClearedRun(
+            level = f[0].toIntOrNull() ?: return null,
+            score = f[1].toIntOrNull() ?: return null,
+            combo = f[2].toIntOrNull() ?: return null,
+            lives = f[3].toIntOrNull()?.takeIf { it > 0 } ?: return null,
+            bestScoreAtRunStart = f[4].toIntOrNull() ?: return null,
+            crossedHighScore = f[5].toBooleanStrictOrNull() ?: return null,
+            crossedLevelRecord = f[6].toBooleanStrictOrNull() ?: return null,
+        )
     }
 
     private fun gameOver() {
@@ -1020,7 +1173,9 @@ class GameViewModel(
             viewModelScope.launch { progressStore.saveBest(newBest) }
             _uiState.update { it.copy(bestLevel = newBest.level, bestScore = newBest.score) }
         }
-        _uiState.update { it.copy(overlay = Overlay.GameOver(beatBest), hasActiveRun = false) }
+        // ゲームオーバーになってもランは終わらせない(広告で復活できるよう「続きから」に残す)。
+        // 自作パズルのテストだけは、抜けると本来のランに戻るので残さない。
+        _uiState.update { it.copy(overlay = Overlay.GameOver(beatBest), hasActiveRun = it.hasActiveRun && !it.isEditorTest) }
     }
 
     /** ゲームオーバー画面から、広告視聴の報酬としてライフを全回復し、ゲームオーバーになった時点の盤面からそのまま続ける。 */
@@ -1040,16 +1195,6 @@ class GameViewModel(
         showToast("📺 広告視聴でライフ全回復!続きから挑戦できます")
     }
 
-    /** クリア画面から、広告視聴の報酬として今回森に加わった赤ちゃんをもう一度加える(=2倍)。1回のクリアにつき1度だけ。 */
-    fun doubleClearRewardWithAd() {
-        val overlay = _uiState.value.overlay as? Overlay.Clear ?: return
-        if (overlay.doubled || overlay.populationGain <= 0) return
-        _uiState.update { it.copy(overlay = overlay.copy(doubled = true)) }
-        viewModelScope.launch { progressStore.addForestPopulation(overlay.populationGain) }
-        sfxEngine.playHighScore()
-        showToast("📺 森のなかまが2倍に! +${overlay.populationGain * 2}匹")
-    }
-
     /** リワード広告がまだ視聴できない状態だった場合に呼ぶ。 */
     fun notifyAdUnavailable() {
         showToast("広告の準備ができていません。少し待ってからもう一度お試しください", isDanger = true)
@@ -1059,7 +1204,9 @@ class GameViewModel(
      * historyも含めることで、アプリがプロセス再起動を挟んで「再開する」で復帰した後にクリア→お気に入り登録しても、
      * 再生ログ(replayLog)が復帰前の手を欠いた不完全なものにならないようにする。 */
     private fun serializeActiveRun(state: GameUiState): String? {
-        if (!state.hasActiveRun || state.isEditorTest || state.lives <= 0) return null
+        // ライフ0(ゲームオーバー中)のランも保存する。ホームに戻ったりアプリを閉じたりしても、
+        // 「続きから」でゲームオーバー画面に戻り、広告で復活すれば続けられるようにするため。
+        if (!state.hasActiveRun || state.isEditorTest) return null
         val snapshot = state.levelSnapshot ?: return null
         return listOf(
             state.level,

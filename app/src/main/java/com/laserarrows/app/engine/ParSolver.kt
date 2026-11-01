@@ -56,6 +56,39 @@ object ParSolver {
         return BoardAnalysis(par, traps, clearable = true, approximate = search.exhausted)
     }
 
+    /**
+     * ヒント用: 今の盤面とコンボから、最高点になる手順の「次の1手」を求める。
+     * 全員が出会える(全消しできる)手順があれば、その中で最も点の高い手順の1手目を返す(clearable=true)。
+     * もう全消しできない局面なら、点だけを見た最善手を返す(clearable=false)。撃てる手が1つも無ければnull。
+     * expectedTotal は、その手を含めてこの先取れる最高点。
+     */
+    fun bestMove(board: Board, startCombo: Int = 0, nodeBudget: Int = DEFAULT_NODE_BUDGET): BestMove? {
+        val cells = board.tiles.keys.toList()
+        if (cells.size > 63) {
+            val move = movesFor(board, startCombo).maxByOrNull { it.gained } ?: return null
+            return BestMove(move.origin, move.hit, move.gained, move.gained, clearable = false, approximate = true)
+        }
+        val fullMask = (1L shl cells.size) - 1
+        val clearing = Search(board, cells, nodeBudget, requireClear = true)
+        clearing.optionsAt(fullMask, startCombo)
+            .filter { it.value != STUCK }
+            .maxByOrNull { it.move.gained + it.value }
+            ?.let { return BestMove(it.move.origin, it.move.hit, it.move.gained, it.move.gained + it.value, clearable = true, approximate = clearing.exhausted) }
+        val anyPath = Search(board, cells, nodeBudget, requireClear = false)
+        val option = anyPath.optionsAt(fullMask, startCombo).maxByOrNull { it.move.gained + it.value } ?: return null
+        return BestMove(option.move.origin, option.move.hit, option.move.gained, option.move.gained + option.value, clearable = false, approximate = true)
+    }
+
+    /** ヒントの1手。origin=タップする子、hit=出会う(ぶつかる)相手、gained=この1手で増えるなかま。 */
+    data class BestMove(
+        val origin: CellPos,
+        val hit: CellPos,
+        val gained: Int,
+        val expectedTotal: Int,
+        val clearable: Boolean,
+        val approximate: Boolean,
+    )
+
     /** 全消しを条件にした探索で「この先どう撃っても受信機が残る」ことを表す値。 */
     private const val STUCK = Int.MIN_VALUE
 

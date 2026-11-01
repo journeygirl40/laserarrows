@@ -115,4 +115,56 @@ class ParSolverTest {
             board = board.remove(origin).remove(result.hit!!)
         }
     }
+
+    @Test
+    fun `ヒントは先に撃つべき中継の子を指す`() {
+        val move = ParSolver.bestMove(relayBoard)!!
+        assertEquals(CellPos(0, 0), move.origin)
+        assertEquals(CellPos(2, 2), move.hit)
+        assertEquals(3, move.gained)
+        assertEquals(4, move.expectedTotal)
+        assertTrue(move.clearable)
+    }
+
+    @Test
+    fun `ヒントどおりに撃ち続けるとパーちょうどで全員出会える`() {
+        for (level in listOf(1, 6, 12, 18)) {
+            var board = PuzzleGenerator.generateForLevel(level, Random(level * 31L)).board
+            val par = ParSolver.solve(board).par
+            var combo = 0
+            var total = 0
+            while (board.tiles.values.any { it is Tile.Receiver }) {
+                val move = ParSolver.bestMove(board, combo) ?: error("Lv.$level で手が無くなった")
+                assertTrue("Lv.$level", move.clearable)
+                val result = LaserSimulator.fireLaser(board, move.origin)
+                assertEquals(move.hit, result.hit)
+                if (board.tiles[move.hit] is Tile.Receiver) {
+                    combo += 1
+                    total += ScoreRules.shotScore(combo, ScoreRules.relayCount(result))
+                } else {
+                    combo = 0
+                }
+                board = board.remove(move.origin).remove(move.hit)
+            }
+            assertEquals("Lv.$level", par, total)
+        }
+    }
+
+    @Test
+    fun `もう全員は出会えない盤面では全消しできないと伝える`() {
+        // 赤の受信機は2つあるのに、走る赤は1匹しかいない。
+        val board = Board(3, 3)
+            .place(CellPos(0, 0), Tile.Shooter(Direction.R, LaserColor.RED))
+            .place(CellPos(0, 2), Tile.Receiver(LaserColor.RED))
+            .place(CellPos(2, 2), Tile.Receiver(LaserColor.RED))
+        val move = ParSolver.bestMove(board)!!
+        assertFalse(move.clearable)
+        assertEquals(CellPos(0, 0), move.origin)
+    }
+
+    @Test
+    fun `撃てる手が無ければヒントは無い`() {
+        val board = Board(3, 3).place(CellPos(1, 1), Tile.Receiver(LaserColor.RED))
+        assertEquals(null, ParSolver.bestMove(board))
+    }
 }

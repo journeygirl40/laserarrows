@@ -3,6 +3,7 @@ package com.laserarrows.app
 import android.app.Application
 import com.laserarrows.app.ads.RewardedAdManager
 import com.laserarrows.app.audio.SfxEngine
+import com.laserarrows.app.data.AnimalStore
 import com.laserarrows.app.data.ProgressStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +18,14 @@ class LaserArrowsApplication : Application() {
         private set
     lateinit var rewardedAdManager: RewardedAdManager
         private set
+    lateinit var animalStore: AnimalStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
         progressStore = ProgressStore(this)
         sfxEngine = SfxEngine(this, applicationScope)
         rewardedAdManager = RewardedAdManager(this)
+        animalStore = AnimalStore(this, applicationScope)
     }
 }

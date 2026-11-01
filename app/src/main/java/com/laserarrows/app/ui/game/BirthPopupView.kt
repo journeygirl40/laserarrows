@@ -1,6 +1,6 @@
 package com.laserarrows.app.ui.game
 
-import com.laserarrows.app.ui.theme.animalRes
+import com.laserarrows.app.ui.theme.animalPainter
 import com.laserarrows.app.ui.theme.TextPrimary
 import com.laserarrows.app.ui.components.GameText
 import com.laserarrows.app.engine.LaserColor
@@ -58,7 +58,7 @@ fun BirthPopupView(at: CellPos, color: LaserColor, babies: Int, cellSizeDp: Dp, 
             // 増えたなかまの小さな顔を並べ(多い時は4つまで)、その下に合計を数字で見せる。
             Row(modifier = Modifier.wrapContentWidth(unbounded = true), verticalAlignment = Alignment.CenterVertically) {
                 repeat(babies.coerceAtMost(4)) {
-                    Image(painterResource(color.animalRes()), contentDescription = null, modifier = Modifier.size(babySize))
+                    Image(animalPainter(color), contentDescription = null, modifier = Modifier.size(babySize))
                 }
             }
             GameText("+$babies", fontSize = 16.sp, color = TextPrimary, singleLine = true)

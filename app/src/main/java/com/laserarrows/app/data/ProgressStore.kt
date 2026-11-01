@@ -40,9 +40,12 @@ class ProgressStore(private val context: Context) {
     private val forestPopulationKey = intPreferencesKey("forest_population")
     private val eggIntroSeenKey = booleanPreferencesKey("egg_intro_seen")
     private val scoreHelpSeenKey = booleanPreferencesKey("score_help_seen")
-    private val forestStageSeenKey = intPreferencesKey("forest_stage_seen")
+    // にぎわいをハイスコアではなく集めた★で数えるようになったので、見届けた段階も★用に新しく取り直す
+    // (古い「forest_stage_seen」はハイスコア基準の段階なので使わない)。
+    private val forestStageSeenKey = intPreferencesKey("forest_stage_seen_stars")
     private val forestExpansionSeenKey = intPreferencesKey("forest_expansion_seen")
     private val activeRunKey = stringPreferencesKey("active_run")
+    private val clearedRunKey = stringPreferencesKey("cleared_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
     private val favoriteSortKeyKey = stringPreferencesKey("favorite_sort_key")
     private val favoriteSortDescendingKey = booleanPreferencesKey("favorite_sort_descending")
@@ -187,6 +190,19 @@ class ProgressStore(private val context: Context) {
     }
 
     suspend fun loadActiveRun(): String? = context.progressDataStore.data.first()[activeRunKey]
+
+    /**
+     * レベルをクリアして、まだ次のレベルへ進んでいないラン(クリア画面を見ている途中)。
+     * この間は盤面が空でプレイ中のランとしては保存されないため、クリア画面のままアプリを閉じても
+     * 次のレベルから続けられるよう、別に覚えておく。次のレベルが始まったら消す。
+     */
+    suspend fun saveClearedRun(serialized: String?) {
+        context.progressDataStore.edit { prefs ->
+            if (serialized == null) prefs.remove(clearedRunKey) else prefs[clearedRunKey] = serialized
+        }
+    }
+
+    suspend fun loadClearedRun(): String? = context.progressDataStore.data.first()[clearedRunKey]
 
     /** レベル一覧の並び順(新しい順/古い順)。アプリを再起動しても選んだ順序を保持する。 */
     val levelListSortDescending: Flow<Boolean> = context.progressDataStore.data.map { prefs ->

@@ -12,6 +12,8 @@ sealed class Overlay {
     data object Import : Overlay()
     data object Favorites : Overlay()
     data object Editor : Overlay()
+    /** どうぶつの設定(Lv.20到達で解放)。 */
+    data object Animals : Overlay()
     data object None : Overlay()
     data class Clear(
         val totalScore: Int,
@@ -23,8 +25,6 @@ sealed class Overlay {
         val couples: List<ClearCouple> = emptyList(),
         /** このクリアで森のなかまに加わった赤ちゃんの数(お気に入り・自作のテストでは0=森は育たない)。 */
         val populationGain: Int = 0,
-        /** 広告を見てpopulationGainをもう一度もらった(=2倍にした)か。1回のクリアにつき1度だけ。 */
-        val doubled: Boolean = false,
     ) : Overlay()
     data class GameOver(val beatBest: Boolean) : Overlay()
     data class ColorPick(val cell: CellPos, val choices: List<LaserColor>) : Overlay()
@@ -33,5 +33,5 @@ sealed class Overlay {
     data class Replay(val entry: ImportHistoryEntry, val initialBoard: Board, val steps: List<ReplayEngine.Step>, val stepIndex: Int) : Overlay()
 }
 
-/** 出会えたふたり組1組分。babyRunner=走ってきた子がたまご生まれの赤ちゃんだった。 */
-data class ClearCouple(val color: LaserColor, val babyRunner: Boolean)
+/** 出会えたふたり組1組分。babyRunner=走ってきた子がたまご生まれの赤ちゃんだった。gained=この出会いで増えたなかまの数。 */
+data class ClearCouple(val color: LaserColor, val babyRunner: Boolean, val gained: Int = 0)

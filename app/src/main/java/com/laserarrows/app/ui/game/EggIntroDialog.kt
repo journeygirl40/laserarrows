@@ -1,6 +1,9 @@
 package com.laserarrows.app.ui.game
 
-import androidx.annotation.DrawableRes
+import com.laserarrows.app.ui.components.CenteredScroll
+import androidx.compose.ui.graphics.painter.Painter
+import com.laserarrows.app.engine.LaserColor
+import com.laserarrows.app.ui.theme.animalPainter
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -60,66 +63,67 @@ fun EggIntroDialog(onClose: () -> Unit) {
             .fillMaxSize()
             .background(Color(0x993B2414))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-        contentAlignment = Alignment.Center,
     ) {
-        CreamCard(modifier = Modifier.widthIn(max = 330.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text("新しいなかま！", fontSize = 13.sp, fontWeight = FontWeight.Black, color = EmberColor)
-                Image(
-                    painterResource(R.drawable.icon_egg),
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp).rotate(wobble),
-                )
-                GameText("なぞのたまご", fontSize = 26.sp, color = Color(0xFFFFF1D6), outline = WoodDark)
-
-                // ルールの絵解き: たまご → キツネにぶつかる → キツネの赤ちゃんに → キツネと出会う
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(BoardGrass, RoundedCornerShape(16.dp))
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
+        CenteredScroll(modifier = Modifier.fillMaxSize()) {
+            CreamCard(modifier = Modifier.widthIn(max = 330.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Step(R.drawable.icon_egg, "たまご")
-                    StepArrow()
-                    Step(R.drawable.animal_fox, "ぶつかる")
-                    StepArrow()
-                    Step(R.drawable.animal_fox, "赤ちゃんに", small = true)
-                    StepArrow()
-                    Step(R.drawable.icon_heart, "出会い！")
-                }
+                    Text("新しいなかま！", fontSize = 13.sp, fontWeight = FontWeight.Black, color = EmberColor)
+                    Image(
+                        painterResource(R.drawable.icon_egg),
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp).rotate(wobble),
+                    )
+                    GameText("なぞのたまご", fontSize = 26.sp, color = Color(0xFFFFF1D6), outline = WoodDark)
 
-                Text(
-                    "ぶつかった動物の赤ちゃんに変わって、\nその向きへ曲がるよ。\n" +
-                        "最後に変わった動物と\n同じ子に届ければ、出会い成立！",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 19.sp,
-                )
-                Text(
-                    "まだ何にも変わっていないたまごは、\n誰とも出会えないので注意。",
-                    fontSize = 11.5.sp,
-                    color = TextMuted,
-                    textAlign = TextAlign.Center,
-                )
-                NeonButton("わかった！", onClick = onClose, modifier = Modifier.fillMaxWidth())
+                    // ルールの絵解き: たまご → キツネにぶつかる → キツネの赤ちゃんに → キツネと出会う
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(BoardGrass, RoundedCornerShape(16.dp))
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Step(painterResource(R.drawable.icon_egg), "たまご")
+                        StepArrow()
+                        Step(animalPainter(LaserColor.RED), "ぶつかる")
+                        StepArrow()
+                        Step(animalPainter(LaserColor.RED), "赤ちゃんに", small = true)
+                        StepArrow()
+                        Step(painterResource(R.drawable.icon_heart), "出会い！")
+                    }
+
+                    Text(
+                        "ぶつかった動物の赤ちゃんに変わって、\nその向きへ曲がるよ。\n" +
+                            "最後に変わった動物と\n同じ子に届ければ、出会い成立！",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 19.sp,
+                    )
+                    Text(
+                        "まだ何にも変わっていないたまごは、\n誰とも出会えないので注意。",
+                        fontSize = 11.5.sp,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                    NeonButton("わかった！", onClick = onClose, modifier = Modifier.fillMaxWidth())
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Step(@DrawableRes icon: Int, label: String, small: Boolean = false) {
+private fun Step(icon: Painter, label: String, small: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(38.dp), contentAlignment = Alignment.Center) {
-            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(if (small) 26.dp else 36.dp).offset(y = if (small) 4.dp else 0.dp))
+            Image(icon, contentDescription = null, modifier = Modifier.size(if (small) 26.dp else 36.dp).offset(y = if (small) 4.dp else 0.dp))
         }
         Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, color = TextPrimary)
     }

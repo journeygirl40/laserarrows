@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.theme.animalPainter
 import com.laserarrows.app.ui.components.GameText
 import com.laserarrows.app.ui.theme.WoodDark
 import com.laserarrows.app.ui.theme.EggTrail
@@ -56,7 +57,6 @@ import com.laserarrows.app.engine.Tile
 import com.laserarrows.app.ui.components.ChunkySurface
 import com.laserarrows.app.ui.theme.BoardGrassDark
 import com.laserarrows.app.ui.theme.GoldColor
-import com.laserarrows.app.ui.theme.animalRes
 import com.laserarrows.app.ui.theme.toComposeColor
 
 @Composable
@@ -138,7 +138,7 @@ private fun RunnerTile(tile: Tile.Shooter, sizeDp: Dp, shape: RoundedCornerShape
     ) {
         if (!firing) {
             Image(
-                painterResource(if (tile.egg) R.drawable.icon_egg else tile.color.animalRes()),
+                if (tile.egg) painterResource(R.drawable.icon_egg) else animalPainter(tile.color),
                 contentDescription = null,
                 modifier = Modifier.size(sizeDp * 0.6f),
             )
@@ -227,7 +227,7 @@ private fun WaitingTile(tile: Tile.Receiver, sizeDp: Dp, shape: RoundedCornerSha
     ) {
         if (meeting) return@ChunkySurface
         Image(
-            painterResource(tile.color.animalRes()),
+            animalPainter(tile.color),
             contentDescription = null,
             modifier = Modifier.size(sizeDp * 0.56f).scale(bob),
         )

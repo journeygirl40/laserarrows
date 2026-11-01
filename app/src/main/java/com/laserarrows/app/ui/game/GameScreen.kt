@@ -10,15 +10,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,9 +45,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.laserarrows.app.LaserArrowsApplication
 import com.laserarrows.app.engine.CellPos
+import com.laserarrows.app.ui.theme.AnimalCatalog
+import com.laserarrows.app.ui.theme.LocalAnimalLooks
 import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.GlassSurface
 import com.laserarrows.app.ui.components.HomeIconButton
+import com.laserarrows.app.ui.components.isLandscape
 import com.laserarrows.app.ui.theme.DangerColor
 import com.laserarrows.app.ui.theme.GlassBorder
 import com.laserarrows.app.ui.theme.BoardGrass
@@ -98,6 +104,9 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
 
     val nextLevel = (uiState.clearedLevels.maxOrNull() ?: 0) + 1
     val context = LocalContext.current
+    // 色ごとの動物(どうぶつの設定で変えたもの)を、盤面・演出・ダイアログなど動物を描くすべての所へ行き渡らせる。
+    val animalStore = (context.applicationContext as LaserArrowsApplication).animalStore
+    val animalSetup by animalStore.setup.collectAsState()
 
     // ホーム画面(overlayスタックの一番外側)以外では、Android標準の「戻る」ボタンでアプリごと終了させず、
     // 各画面のonBack相当の処理に委ねる。ホーム画面ではfalseにしてシステム標準の挙動(アプリ終了)に任せる。
@@ -105,6 +114,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         when (uiState.overlay) {
             Overlay.Home -> Unit
             Overlay.Editor -> viewModel.editorBack()
+            Overlay.Animals -> viewModel.animalsBack()
             Overlay.LevelList -> viewModel.listBack()
             Overlay.Favorites -> viewModel.favoritesBack()
             Overlay.Import -> viewModel.importBack()
@@ -116,6 +126,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
         }
     }
 
+    CompositionLocalProvider(LocalAnimalLooks provides animalSetup.looks) {
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             uiState.overlay == Overlay.Home -> HomeOverlay(
@@ -137,6 +148,19 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 onShowList = { viewModel.goList() },
                 onShowFavorites = { viewModel.goFavorites() },
                 onShowEditor = { viewModel.goEditor() },
+                animalsUnlocked = uiState.bestLevelReached >= AnimalCatalog.SETTINGS_UNLOCK_LEVEL,
+                onShowAnimals = { viewModel.goAnimals() },
+            )
+
+            uiState.overlay == Overlay.Animals -> AnimalSettingsScreen(
+                setup = animalSetup,
+                levelReached = uiState.bestLevelReached,
+                onBack = { viewModel.animalsBack() },
+                onAssign = { color, key -> animalStore.assign(color, key) },
+                onReset = { animalStore.resetAssignment() },
+                onAddCustom = { uri, name, color, onDone -> animalStore.addCustom(uri, name, color, onDone) },
+                onRenameCustom = { id, name -> animalStore.renameCustom(id, name) },
+                onDeleteCustom = { id -> animalStore.deleteCustom(id) },
             )
 
             uiState.overlay == Overlay.Editor -> EditorScreen(
@@ -262,20 +286,24 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             }
         }
     }
+    }
 }
 
 @Composable
 private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, context: android.content.Context) {
     val scope = rememberCoroutineScope()
     var shakeCell by remember { mutableStateOf<CellPos?>(null) }
+    // 盤面は画面の向きに合わせて折り返して見せる(横向きでは縦長の盤面を横長に)。ゲームの中身は元の向きのままで、
+    // 描く直前とタップを受けた直後だけ変換する([BoardOrientation])。
+    val flip = shouldFlipBoard(uiState.board)
+    val shownBoard = remember(uiState.board, flip) { uiState.board.flippedIf(flip) }
+    val shownShot = remember(uiState.activeShot, flip) { uiState.activeShot?.flippedIf(flip) }
+    // ヒントは盤面がその時のままの間だけ見せる。走っている最中は道筋が重ならないよう隠す。
+    val shownHint = uiState.shownHint?.takeIf { uiState.activeShot == null }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    // 縦向き: 上にHUD、真ん中に盤面、下にツールバー。
+    // 横向き: 盤面を高さいっぱいに大きく取り、HUDとツールバーは左の列にまとめる。
+    val topBar = @Composable {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -301,12 +329,14 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
             )
         }
 
+    }
+    val boardArea = @Composable { modifier: Modifier ->
         Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = modifier,
             contentAlignment = Alignment.Center,
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val board = uiState.board
+                val board = shownBoard
                 val hasBoard = board.cols > 0 && board.rows > 0
                 // マスの大きさと隙間を画面の1ピクセル単位にそろえる。半端なピクセルのままだと、行ごとに四捨五入の向きが変わって
                 // マスの位置が1〜2ピクセルずつ上下にずれ、上に重ねて描くキャラクターや線ともずれてしまう。
@@ -354,14 +384,26 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                             BoardView(
                                 board = board,
                                 cellSizeDp = cellSizeDp,
-                                shakeCell = shakeCell,
-                                onTapCell = { viewModel.handleTap(it) },
+                                shakeCell = shakeCell?.flippedIf(flip),
+                                onTapCell = { viewModel.handleTap(it.flippedIf(flip)) },
                                 emptyCellsTappable = uiState.addingLight,
-                                firingCell = uiState.activeShot?.originKey,
-                                meetingCell = uiState.activeShot?.takeIf { !it.hitIsShooterClash }?.result?.hit,
+                                firingCell = shownShot?.originKey,
+                                meetingCell = shownShot?.takeIf { !it.hitIsShooterClash }?.result?.hit,
                             )
+                            shownHint?.let { hint ->
+                                HintOverlay(
+                                    origin = hint.origin.flippedIf(flip),
+                                    result = hint.result.flippedIf(flip),
+                                    gained = hint.gained,
+                                    cellSizeDp = cellSizeDp,
+                                    gapDp = gapDp,
+                                    cellSizePx = cellSizePx,
+                                    gapPx = gapPx,
+                                    modifier = Modifier.size(boardWidthDp, boardHeightDp),
+                                )
+                            }
                             BeamCanvas(
-                                shot = uiState.activeShot,
+                                shot = shownShot,
                                 cellSizePx = cellSizePx,
                                 gapPx = gapPx,
                                 onRevealFinished = {
@@ -383,13 +425,13 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                 val color = popup.color
                                 if (at != null && color != null) {
                                     key(popup.token) {
-                                        BirthPopupView(at, color, popup.gained, cellSizeDp, gapDp)
+                                        BirthPopupView(at.flippedIf(flip), color, popup.gained, cellSizeDp, gapDp)
                                     }
                                 }
                             }
                             if (uiState.overlay is Overlay.Clear) {
                                 ClearFinaleCanvas(
-                                    finale = uiState.clearFinale,
+                                    finale = uiState.clearFinale?.flippedIf(flip),
                                     cellSizePx = cellSizePx,
                                     gapPx = gapPx,
                                     modifier = Modifier.size(boardWidthDp, boardHeightDp),
@@ -425,86 +467,76 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                         }
                     }
 
-                    if (uiState.overlay != Overlay.None) {
-                        GlassSurface(
-                            shape = RoundedCornerShape(19.dp),
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                when (val overlay = uiState.overlay) {
-                                    Overlay.Home -> Unit
-                                    Overlay.Editor -> Unit
-                                    Overlay.LevelList -> Unit
-                                    Overlay.Favorites -> Unit
-                                    Overlay.Import -> Unit
-                                    is Overlay.Clear -> ClearOverlay(
-                                        totalScore = overlay.totalScore,
-                                        livesLost = overlay.livesLost,
-                                        levelScore = overlay.levelScore,
-                                        par = overlay.par,
-                                        stars = overlay.stars,
-                                        isEditorTest = uiState.isEditorTest,
-                                        isImported = uiState.isImported,
-                                        crossedHighScore = uiState.crossedHighScoreThisRun,
-                                        crossedLevelRecord = uiState.crossedLevelRecordThisRun,
-                                        level = uiState.level,
-                                        onNext = { viewModel.clearNext() },
-                                        onHome = { viewModel.clearHome() },
-                                        onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
-                                        populationGain = overlay.populationGain,
-                                        doubled = overlay.doubled,
-                                        population = uiState.forestPopulation,
-                                        onWatchAdToDouble = {
-                                            val activity = context as? Activity
-                                            val app = context.applicationContext as LaserArrowsApplication
-                                            if (activity != null) {
-                                                app.rewardedAdManager.show(
-                                                    activity = activity,
-                                                    onRewarded = { viewModel.doubleClearRewardWithAd() },
-                                                    onUnavailable = { viewModel.notifyAdUnavailable() },
-                                                )
-                                            } else {
-                                                viewModel.notifyAdUnavailable()
-                                            }
-                                        },
-                                    )
-                                    is Overlay.GameOver -> GameOverOverlay(
-                                        level = uiState.level,
-                                        score = uiState.score,
-                                        bestScoreBeforeRun = uiState.bestScoreAtRunStart,
-                                        beatBest = overlay.beatBest,
-                                        crossedLevelRecord = uiState.crossedLevelRecordThisRun,
-                                        isEditorTest = uiState.isEditorTest,
-                                        isImported = uiState.isImported,
-                                        onHome = { viewModel.gameOverHome() },
-                                        onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
-                                        onWatchAdToRevive = {
-                                            val activity = context as? Activity
-                                            val app = context.applicationContext as LaserArrowsApplication
-                                            if (activity != null) {
-                                                app.rewardedAdManager.show(
-                                                    activity = activity,
-                                                    onRewarded = { viewModel.reviveWithAd() },
-                                                    onUnavailable = { viewModel.notifyAdUnavailable() },
-                                                )
-                                            } else {
-                                                viewModel.notifyAdUnavailable()
-                                            }
-                                        },
-                                    )
-                                    is Overlay.ColorPick -> ColorPickOverlay(
-                                        choices = overlay.choices,
-                                        onPick = { viewModel.confirmLightColor(it) },
-                                        onCancel = { viewModel.cancelLightPick() },
-                                    )
-                                    is Overlay.DirectionPick -> DirectionPickOverlay(
-                                        color = overlay.color,
-                                        onPick = { viewModel.confirmLightDirection(it) },
-                                        onCancel = { viewModel.cancelLightPick() },
-                                    )
-                                    Overlay.None -> Unit
-                                    is Overlay.Replay -> Unit
-                                }
+                }
+                // 結果・ゲームオーバーなどの札は、木枠の中ではなく盤面エリア全体に重ねる。
+                // 盤面が小さい(マスが少ない)時でも、結果の情報とボタンがスクロールせずに収まるようにするため。
+                if (uiState.overlay != Overlay.None) {
+                    GlassSurface(
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            when (val overlay = uiState.overlay) {
+                                Overlay.Home -> Unit
+                                Overlay.Editor -> Unit
+                                Overlay.Animals -> Unit
+                                Overlay.LevelList -> Unit
+                                Overlay.Favorites -> Unit
+                                Overlay.Import -> Unit
+                                is Overlay.Clear -> ClearOverlay(
+                                    totalScore = overlay.totalScore,
+                                    livesLost = overlay.livesLost,
+                                    levelScore = overlay.levelScore,
+                                    par = overlay.par,
+                                    stars = overlay.stars,
+                                    isEditorTest = uiState.isEditorTest,
+                                    isImported = uiState.isImported,
+                                    crossedHighScore = uiState.crossedHighScoreThisRun,
+                                    crossedLevelRecord = uiState.crossedLevelRecordThisRun,
+                                    level = uiState.level,
+                                    onNext = { viewModel.clearNext() },
+                                    onHome = { viewModel.clearHome() },
+                                    onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
+                                    populationGain = overlay.populationGain,
+                                    population = uiState.forestPopulation,
+                                )
+                                is Overlay.GameOver -> GameOverOverlay(
+                                    level = uiState.level,
+                                    score = uiState.score,
+                                    bestScoreBeforeRun = uiState.bestScoreAtRunStart,
+                                    beatBest = overlay.beatBest,
+                                    crossedLevelRecord = uiState.crossedLevelRecordThisRun,
+                                    isEditorTest = uiState.isEditorTest,
+                                    isImported = uiState.isImported,
+                                    onHome = { viewModel.gameOverHome() },
+                                    onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
+                                    onWatchAdToRevive = {
+                                        val activity = context as? Activity
+                                        val app = context.applicationContext as LaserArrowsApplication
+                                        if (activity != null) {
+                                            app.rewardedAdManager.show(
+                                                activity = activity,
+                                                onRewarded = { viewModel.reviveWithAd() },
+                                                onUnavailable = { viewModel.notifyAdUnavailable() },
+                                            )
+                                        } else {
+                                            viewModel.notifyAdUnavailable()
+                                        }
+                                    },
+                                )
+                                is Overlay.ColorPick -> ColorPickOverlay(
+                                    choices = overlay.choices,
+                                    onPick = { viewModel.confirmLightColor(it) },
+                                    onCancel = { viewModel.cancelLightPick() },
+                                )
+                                is Overlay.DirectionPick -> DirectionPickOverlay(
+                                    color = overlay.color,
+                                    // 選ぶ矢印は見た目の向きなので、元の盤面の向きに戻して渡す。
+                                    onPick = { viewModel.confirmLightDirection(it.flippedIf(flip)) },
+                                    onCancel = { viewModel.cancelLightPick() },
+                                )
+                                Overlay.None -> Unit
+                                is Overlay.Replay -> Unit
                             }
                         }
                     }
@@ -512,9 +544,12 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
             }
         }
 
+    }
+    val bottomBar = @Composable {
         // クリア画面の間は、使い道のないツールバーの場所に「出会えたふたり組」のパレードを出す。
         // ツールバー自体は透明にして残し、盤面の大きさ(=クリア花火の位置)が変わらないようにする。
         val parade = (uiState.overlay as? Overlay.Clear)?.takeIf { it.couples.isNotEmpty() }
+        val favoriteDone = remember(uiState.levelSnapshot?.board, uiState.importHistory) { uiState.isCurrentBoardFavorite }
         Box(modifier = Modifier.fillMaxWidth()) {
             Toolbar(
                 undoEnabled = parade == null && uiState.history.isNotEmpty() && uiState.lives > 0,
@@ -524,16 +559,11 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                 onUndo = { viewModel.undo() },
                 onRestartLevel = { viewModel.restartLevel() },
                 onToggleAddLight = { viewModel.toggleAddLight() },
-                onShare = {
-                    if (parade == null) {
-                        val code = viewModel.exportCurrentBoard()
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, code)
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, null))
-                    }
-                },
+                hintEnabled = parade == null && uiState.lives > 0 && uiState.shownHint == null && !uiState.hintLoading,
+                hintLoading = uiState.hintLoading,
+                onHint = { viewModel.useHint() },
+                favoriteDone = favoriteDone,
+                onFavorite = { if (parade == null) viewModel.addCurrentBoardToFavorites() },
                 modifier = Modifier.padding(horizontal = 2.dp).alpha(if (parade == null) 1f else 0f),
             )
             if (parade != null) {
@@ -547,6 +577,37 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                     modifier = Modifier.matchParentSize().padding(horizontal = 2.dp),
                 )
             }
+        }
+    }
+
+    if (isLandscape()) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(
+                modifier = Modifier.width(345.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                topBar()
+                bottomBar()
+            }
+            boardArea(Modifier.weight(1f).fillMaxHeight())
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            topBar()
+            boardArea(Modifier.weight(1f).fillMaxWidth())
+            bottomBar()
         }
     }
 }

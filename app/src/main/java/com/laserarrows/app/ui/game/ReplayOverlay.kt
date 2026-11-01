@@ -1,5 +1,7 @@
 package com.laserarrows.app.ui.game
 
+import androidx.compose.foundation.layout.PaddingValues
+import com.laserarrows.app.ui.components.AdaptiveScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -70,35 +72,53 @@ fun ReplayOverlay(
             .fillMaxSize()
             .background(Color.Transparent),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column {
-                Text("📖 プレイログ", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-                Text(
-                    replay.entry.memo.ifBlank { "(メモなし)" },
-                    fontSize = 12.5.sp,
-                    color = TextMuted,
-                )
-            }
+        AdaptiveScreen(
+            portraitPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+            spacing = 12.dp,
+            sideWidth = 320.dp,
+            header = {
+                Column {
+                    Text("📖 プレイログ", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                    Text(
+                        replay.entry.memo.ifBlank { "(メモなし)" },
+                        fontSize = 12.5.sp,
+                        color = TextMuted,
+                    )
+                }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InfoChip("手 ${replay.stepIndex}/$totalSteps", Neon2)
-                InfoChip("スコア ${frame.score}", GoldText)
-                if (frame.combo >= 2) InfoChip("コンボ ×${frame.combo}", GoldText)
-                if (frame.lightAddedAt != null) InfoChip("💡 光を設置", GoldText)
-            }
-
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InfoChip("手 ${replay.stepIndex}/$totalSteps", Neon2)
+                    InfoChip("スコア ${frame.score}", GoldText)
+                    if (frame.combo >= 2) InfoChip("コンボ ×${frame.combo}", GoldText)
+                    if (frame.lightAddedAt != null) InfoChip("💡 光を設置", GoldText)
+                }
+            },
+            footer = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    GhostButton(
+                        "◀ 戻る",
+                        onClick = onStepBack,
+                        enabled = replay.stepIndex > 0,
+                        modifier = Modifier.weight(1f),
+                    )
+                    NeonButton(
+                        "進む ▶",
+                        onClick = onStepForward,
+                        enabled = replay.stepIndex < totalSteps,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                GhostButton("⭐ お気に入りへ戻る", onClick = onClose, modifier = Modifier.fillMaxWidth())
+            },
+        ) { boardModifier ->
             Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = boardModifier,
                 contentAlignment = Alignment.Center,
             ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val board = frame.board
+                    // ゲーム画面と同じく、画面の向きに合わせて盤面を折り返して見せる([BoardOrientation])。
+                    val flip = shouldFlipBoard(frame.board)
+                    val board = frame.board.flippedIf(flip)
                     val hasBoard = board.cols > 0 && board.rows > 0
                     val gapDp = 5.dp
                     val marginDp = 10.dp
@@ -107,7 +127,7 @@ fun ReplayOverlay(
                         val availH = maxHeight - marginDp * 2
                         val cellFromW = (availW - gapDp * (board.cols - 1)) / board.cols
                         val cellFromH = (availH - gapDp * (board.rows - 1)) / board.rows
-                        val cellSizeDp = if (cellFromW < cellFromH) cellFromW else cellFromH
+                        val cellSizeDp = (if (cellFromW < cellFromH) cellFromW else cellFromH).coerceAtLeast(0.dp) // 画面がとても小さい時にマイナスにならないように
                         val boardWidthDp = cellSizeDp * board.cols + gapDp * (board.cols - 1)
                         val boardHeightDp = cellSizeDp * board.rows + gapDp * (board.rows - 1)
                         val panelWidthDp = boardWidthDp + marginDp * 2
@@ -125,12 +145,12 @@ fun ReplayOverlay(
                         ) {
                             Box(modifier = Modifier.size(boardWidthDp, boardHeightDp)) {
                                 BoardView(
-                                    board = displayBoard,
+                                    board = displayBoard.flippedIf(flip),
                                     cellSizeDp = cellSizeDp,
                                     shakeCell = null,
                                     onTapCell = {},
-                                    firingCell = if (showBeam) frame.firedFrom else null,
-                                    meetingCell = if (showBeam && !frame.shotHitIsShooterClash) frame.shotResult?.hit else null,
+                                    firingCell = if (showBeam) frame.firedFrom?.flippedIf(flip) else null,
+                                    meetingCell = if (showBeam && !frame.shotHitIsShooterClash) frame.shotResult?.hit?.flippedIf(flip) else null,
                                 )
                                 if (showBeam) {
                                     val shotResult = frame.shotResult
@@ -143,7 +163,7 @@ fun ReplayOverlay(
                                                 bends = frame.shotBends,
                                                 hitIsShooterClash = frame.shotHitIsShooterClash,
                                                 token = replay.stepIndex.toLong(),
-                                            ),
+                                            ).flippedIf(flip),
                                             cellSizePx = cellSizePx,
                                             gapPx = gapPx,
                                             onRevealFinished = {},
@@ -160,22 +180,6 @@ fun ReplayOverlay(
                     }
                 }
             }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                GhostButton(
-                    "◀ 戻る",
-                    onClick = onStepBack,
-                    enabled = replay.stepIndex > 0,
-                    modifier = Modifier.weight(1f),
-                )
-                NeonButton(
-                    "進む ▶",
-                    onClick = onStepForward,
-                    enabled = replay.stepIndex < totalSteps,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            GhostButton("⭐ お気に入りへ戻る", onClick = onClose, modifier = Modifier.fillMaxWidth())
         }
     }
 }

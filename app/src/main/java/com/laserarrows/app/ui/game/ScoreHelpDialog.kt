@@ -1,5 +1,6 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.CenteredScroll
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,32 +47,33 @@ fun ScoreHelpDialog(onClose: () -> Unit) {
             .fillMaxSize()
             .background(Color(0x993B2414))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-        contentAlignment = Alignment.Center,
     ) {
-        CreamCard(modifier = Modifier.widthIn(max = 340.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                GameText("なかまの増え方", fontSize = 24.sp, color = Color(0xFFFFF1D6), outline = WoodDark)
-                RuleRow(R.drawable.icon_sparkling_heart, "出会うと なかま +1", null)
-                RuleRow(
-                    R.drawable.icon_link,
-                    "曲がるたび +2, +3, +4…",
-                    "違う動物の矢印で曲がるほど増える\n例: 2回曲がって出会うと 1+2+3 = 6匹",
-                )
-                RuleRow(
-                    R.drawable.icon_fire,
-                    "コンボ1回ごとに +10%",
-                    "続けて出会うとコンボが増える\nミスやぶつかりで0にもどる",
-                )
-                RuleRow(
-                    R.drawable.icon_star,
-                    "目標に届くと ★3",
-                    "目標 = いちばんうまく解いた時の数\n遠回りして出会う順番を探そう",
-                )
-                NeonButton("わかった!", onClick = onClose, modifier = Modifier.fillMaxWidth())
+        CenteredScroll(modifier = Modifier.fillMaxSize()) {
+            CreamCard(modifier = Modifier.widthIn(max = 340.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    GameText("なかまの増え方", fontSize = 24.sp, color = Color(0xFFFFF1D6), outline = WoodDark)
+                    RuleRow(R.drawable.icon_sparkling_heart, "出会うと なかま +1", null)
+                    RuleRow(
+                        R.drawable.icon_link,
+                        "曲がるたび +2, +3, +4…",
+                        "違う動物の矢印で曲がるほど増える\n例: 2回曲がって出会うと 1+2+3 = 6匹",
+                    )
+                    RuleRow(
+                        R.drawable.icon_fire,
+                        "コンボ1回ごとに +10%",
+                        "続けて出会うとコンボが増える\nミスやぶつかりで0にもどる",
+                    )
+                    RuleRow(
+                        R.drawable.icon_star,
+                        "目標に届くと ★3",
+                        "目標 = いちばんうまく解いた時の数\n遠回りして出会う順番を探そう",
+                    )
+                    NeonButton("わかった!", onClick = onClose, modifier = Modifier.fillMaxWidth())
+                }
             }
         }
     }

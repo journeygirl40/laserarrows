@@ -1,5 +1,10 @@
 package com.laserarrows.app.ui.game
 
+import com.laserarrows.app.ui.components.isLandscape
+import androidx.compose.foundation.layout.fillMaxHeight
+import com.laserarrows.app.ui.components.CenteredScroll
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import com.laserarrows.app.R
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.offset
@@ -64,9 +69,7 @@ fun ClearOverlay(
     onHome: () -> Unit,
     onAddToFavorites: (memo: String) -> Unit,
     populationGain: Int,
-    doubled: Boolean,
     population: Int,
-    onWatchAdToDouble: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val perfect = livesLost == 0
@@ -81,90 +84,142 @@ fun ClearOverlay(
     var addedFavorite by remember { mutableStateOf(false) }
     var memo by remember { mutableStateOf("") }
 
-    Column(
-        // 記録更新チップや★が増えても盤面パネル内に収まりきらない場合に備え、スクロール可能にしておく。
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        GameText("CLEAR!", fontSize = 34.sp, color = GoldColor, outline = WoodDark)
-        AnimatedStars(stars)
-        Text(
-            if (levelScore >= par) "目標達成! なかま${levelScore}匹 / 目標${par}匹" else "なかま${levelScore}匹 / 目標${par}匹 (★3まであと${par - levelScore}匹)",
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (levelScore >= par) GoldText else TextPrimary,
-        )
-        Text("ここまでの合計 なかま${totalScore}匹", fontSize = 12.sp, color = TextMuted)
+    // 「次のレベルへ」がいちばん押されるボタンなので、ボタンの先頭に幅いっぱいの大きなボタンで置き、
+    // ボタン群は枠の下に固定して、結果の情報がどれだけ長くてもスクロールせずに押せるようにする。ホーム・お気に入りはその下に小さく並べる。
+    // 最後の1組をタップした指のまま押してしまわないよう、出てから少しの間は押せないようにしておく。
+    var actionsReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(ACTION_GUARD_MS)
+        actionsReady = true
+    }
 
-        Box(
-            modifier = Modifier
-                .background(badgeColor.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
-                .border(1.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-        ) {
-            Text(badgeText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = badgeColor)
-        }
-        if (!isImported && (crossedHighScore || crossedLevelRecord)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (crossedHighScore) {
-                    RecordChip("🏆 ハイスコア更新", GoldText)
-                }
-                if (crossedLevelRecord) {
-                    RecordChip("🚀 Lv.$level 到達レベル記録更新", Neon2)
-                }
+    // 結果の要約(CLEAR!・★・スコア・記録)。
+    val summary = @Composable {
+            GameText("CLEAR!", fontSize = 34.sp, color = GoldColor, outline = WoodDark)
+            AnimatedStars(stars)
+            Text(
+                if (levelScore >= par) "目標達成! なかま${levelScore}匹 / 目標${par}匹" else "なかま${levelScore}匹 / 目標${par}匹 (★3まであと${par - levelScore}匹)",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (levelScore >= par) GoldText else TextPrimary,
+            )
+            Text("ここまでの合計 なかま${totalScore}匹", fontSize = 12.sp, color = TextMuted)
+
+            Box(
+                modifier = Modifier
+                    .background(badgeColor.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+                    .border(1.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            ) {
+                Text(badgeText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = badgeColor)
             }
-        }
-
-        if (populationGain > 0) {
-            ForestGainCard(gain = populationGain, doubled = doubled, population = population, onWatchAdToDouble = onWatchAdToDouble)
-        }
-
-        if (!isImported) {
-            when {
-                addedFavorite -> {
-                    Text("⭐ お気に入りに登録しました", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GoldText)
-                }
-                addingFavorite -> {
-                    OutlinedTextField(
-                        value = memo,
-                        onValueChange = { memo = it },
-                        placeholder = { Text("メモ(任意・例:誰との対戦か)", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.widthIn(max = 280.dp),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GhostButton(
-                            "⭐ 登録する",
-                            onClick = {
-                                onAddToFavorites(memo)
-                                addedFavorite = true
-                            },
-                        )
-                        GhostButton("キャンセル", onClick = { addingFavorite = false; memo = "" })
+            if (!isImported && (crossedHighScore || crossedLevelRecord)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (crossedHighScore) {
+                        RecordChip("🏆 ハイスコア更新", GoldText)
+                    }
+                    if (crossedLevelRecord) {
+                        RecordChip("🚀 Lv.$level 到達レベル記録更新", Neon2)
                     }
                 }
-                else -> {
-                    GhostButton("⭐ お気に入りへ登録", onClick = { addingFavorite = true })
-                }
+            }
+    }
+    // 森のなかまと、お気に入りのメモ入力。
+    val extras = @Composable {
+            if (populationGain > 0) {
+                ForestGainCard(gain = populationGain, population = population)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NeonButton("次のレベルへ", onClick = onNext, modifier = Modifier.weight(1f))
-                GhostButton(homeLabel, onClick = onHome, modifier = Modifier.weight(1f))
+            if (!isImported && addingFavorite && !addedFavorite) {
+                OutlinedTextField(
+                    value = memo,
+                    onValueChange = { memo = it },
+                    placeholder = { Text("メモ(任意・例:誰との対戦か)", fontSize = 13.sp) },
+                    singleLine = true,
+                    modifier = Modifier.widthIn(max = 280.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton(
+                        "⭐ 登録する",
+                        onClick = {
+                            onAddToFavorites(memo)
+                            addedFavorite = true
+                            addingFavorite = false
+                        },
+                    )
+                    GhostButton("キャンセル", onClick = { addingFavorite = false; memo = "" })
+                }
+            }
+    }
+    // ボタン。メインの「次のレベルへ」が先頭、その下にサブ。
+    val actions = @Composable {
+        if (!isImported) {
+            // メインの行き先: 次のレベルへ(いちばん大きく、ボタンの先頭)。
+            NeonButton("次のレベルへ ▶", onClick = onNext, enabled = actionsReady, modifier = Modifier.fillMaxWidth())
+            // サブの行き先: ホームへ / お気に入りへ登録(小さめ、次へのすぐ下)。
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                GhostButton(homeLabel, onClick = onHome, enabled = actionsReady, compact = true, modifier = Modifier.weight(1f))
+                GhostButton(
+                    when {
+                        addedFavorite -> "⭐ 登録済み"
+                        else -> "⭐ お気に入り"
+                    },
+                    onClick = { addingFavorite = true },
+                    enabled = actionsReady && !addedFavorite && !addingFavorite,
+                    compact = true,
+                    modifier = Modifier.weight(1f),
+                )
             }
         } else {
-            GhostButton(homeLabel, onClick = onHome)
+            // 「次」が無い盤面(自作のテスト・お気に入り)では、戻るボタンが主役。
+            NeonButton(homeLabel, onClick = onHome, enabled = actionsReady, modifier = Modifier.fillMaxWidth())
+        }
+    }
+
+    if (isLandscape()) {
+        // 横向き: 左に要約、右に森のなかまとボタン(低い画面でもスクロールせずに全部見えるように)。
+        Row(
+            modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            CenteredScroll(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { summary() }
+            }
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CenteredScroll(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { extras() }
+                }
+                actions()
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // 結果の情報。記録更新チップやメモ入力が増えて入りきらない時は、ここだけスクロールする。
+            CenteredScroll(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    summary()
+                    extras()
+                }
+            }
+            actions()
         }
     }
 }
 
-/**
- * このクリアで森のなかまに加わった赤ちゃんと、森が次に広がるまでの残り。
- * 広告を見ると同じ数をもう一度もらえる(2倍)ことを、森が早く広がるご褒美として見せる。
- */
+/** クリア画面が出てから、ボタンを押せるようになるまでの時間(最後のタップのまま押してしまうのを防ぐ)。 */
+private const val ACTION_GUARD_MS = 600L
+
+/** このクリアで森のなかまに加わった赤ちゃんと、森が次に広がるまでの残り。 */
 @Composable
-private fun ForestGainCard(gain: Int, doubled: Boolean, population: Int, onWatchAdToDouble: () -> Unit) {
+private fun ForestGainCard(gain: Int, population: Int) {
     val stage = ForestExpansion.of(population)
     val next = ForestExpansion.next(stage)
     val shape = RoundedCornerShape(16.dp)
@@ -177,18 +232,12 @@ private fun ForestGainCard(gain: Int, doubled: Boolean, population: Int, onWatch
             .border(1.dp, ForestGreen.copy(alpha = 0.6f), shape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("🌳 森のなかま +${if (doubled) gain * 2 else gain}匹", fontSize = 14.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-            if (doubled) RecordChip("2倍!", GoldText)
-        }
+        Text("🌳 森のなかま +${gain}匹", fontSize = 14.sp, fontWeight = FontWeight.Black, color = TextPrimary)
         if (next != null) {
             ForestProgressBar(((population - stage.minScore).toFloat() / (next.minScore - stage.minScore)).coerceIn(0f, 1f), ForestGreen)
             Text("あと${next.minScore - population}匹で森が広がる(「${next.name}」)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
         } else {
             Text("いちばん広い森です", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldText)
-        }
-        if (!doubled) {
-            GhostButton("📺 広告を見て2倍に(+${gain}匹)", onClick = onWatchAdToDouble)
         }
     }
 }
