@@ -67,6 +67,7 @@ class GameViewModel(
                         forestPopulation = current.forestPopulation,
                         forestStageSeen = current.forestStageSeen,
                         forestExpansionSeen = current.forestExpansionSeen,
+                        forestHiddenDecor = current.forestHiddenDecor,
                         eggIntroSeen = current.eggIntroSeen,
                         scoreHelpSeen = current.scoreHelpSeen,
                         importHistory = current.importHistory,
@@ -149,6 +150,11 @@ class GameViewModel(
         viewModelScope.launch {
             progressStore.forestExpansionSeen.collect { seen ->
                 _uiState.update { it.copy(forestExpansionSeen = seen) }
+            }
+        }
+        viewModelScope.launch {
+            progressStore.forestHiddenDecor.collect { hidden ->
+                _uiState.update { it.copy(forestHiddenDecor = hidden) }
             }
         }
         viewModelScope.launch {
@@ -366,6 +372,38 @@ class GameViewModel(
         _uiState.update { it.copy(level = nextLevel) }
         startLevel()
     }
+
+    /**
+     * クリア画面(★3未満)から、同じステージを最初の状態からやり直す。
+     * スコア・コンボ・ライフはこのレベルを始めた時点に戻す(ハートは使わない)。★・記録は良い方が残る。
+     */
+    fun clearRetry() {
+        val current = _uiState.value
+        if (current.overlay !is Overlay.Clear || current.isImported) return
+        val snapshot = current.levelSnapshot ?: return
+        _uiState.update {
+            it.copy(
+                board = snapshot.board,
+                lives = snapshot.lives,
+                score = snapshot.score,
+                combo = snapshot.combo,
+                history = emptyList(),
+                remainingReceivers = snapshot.board.tiles.values.count { t -> t is Tile.Receiver },
+                busy = false,
+                activeShot = null,
+                hint = null,
+                comboPopup = null,
+                scoreBonusPopup = null,
+                clearFinale = null,
+                overlay = Overlay.None,
+                hasActiveRun = true,
+            )
+        }
+        // プレイ中のランに戻ったので、クリア画面のまま閉じた時用の記録は要らない。
+        viewModelScope.launch { progressStore.saveClearedRun(null) }
+        showToast("🔄 最初からやり直し! 撃つ順番を変えてみよう")
+    }
+
     fun selectLevel(level: Int) = newRun(level)
     fun debugGoToLevel(level: Int) {
         if (level < 1) return
@@ -394,6 +432,7 @@ class GameViewModel(
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
                 forestExpansionSeen = it.forestExpansionSeen,
+                forestHiddenDecor = it.forestHiddenDecor,
                 eggIntroSeen = it.eggIntroSeen,
                 scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
@@ -428,6 +467,7 @@ class GameViewModel(
                     busy = false,
                     history = emptyList(),
                     levelSnapshot = LevelSnapshot(board, it.lives, it.score, it.combo),
+                    levelForestCredited = 0,
                     loadingProgress = null,
                     // なぞのたまごが初めて盤面に出た時だけ、遊び方の説明を出す。
                     showEggIntro = !it.eggIntroSeen && board.tiles.values.any { tile -> tile is Tile.Shooter && tile.egg },
@@ -582,6 +622,7 @@ class GameViewModel(
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
                 forestExpansionSeen = it.forestExpansionSeen,
+                forestHiddenDecor = it.forestHiddenDecor,
                 eggIntroSeen = it.eggIntroSeen,
                 scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
@@ -681,6 +722,7 @@ class GameViewModel(
                 forestPopulation = it.forestPopulation,
                 forestStageSeen = it.forestStageSeen,
                 forestExpansionSeen = it.forestExpansionSeen,
+                forestHiddenDecor = it.forestHiddenDecor,
                 eggIntroSeen = it.eggIntroSeen,
                 scoreHelpSeen = it.scoreHelpSeen,
                 importHistory = it.importHistory,
@@ -836,7 +878,13 @@ class GameViewModel(
     }
 
     // ---- タイトルの森 ----
-    /** ホームで森の段階が上がったのを見せた時に呼ぶ。同じ段階で二度祝わないよう記録し、祝いの音を鳴らす。 */
+    /** 解放済みの森のかざりを、つける/外す。 */
+    fun setForestDecorVisible(key: String, visible: Boolean) {
+        _uiState.update { it.copy(forestHiddenDecor = if (visible) it.forestHiddenDecor - key else it.forestHiddenDecor + key) }
+        viewModelScope.launch { progressStore.setForestDecorVisible(key, visible) }
+    }
+
+    /** ホームで森のごほうびをタップして解放した時に呼ぶ(解放済みの段階を記録し、祝いの音を鳴らす)。 */
     fun onForestStageCelebrated(level: Int) {
         sfxEngine.playForestLevelUp()
         _uiState.update { it.copy(forestStageSeen = level) }
@@ -1049,6 +1097,8 @@ class GameViewModel(
             ?: 0
         val levelScore = current.levelScore
         val stars = ScoreRules.starsFor(levelScore, par)
+        // やり直して再びクリアした時は、前回までに加えた数を上回った分だけ森に加える。
+        val forestGain = if (current.isImported) 0 else (levelScore - current.levelForestCredited).coerceAtLeast(0)
         // 「次のレベルへ」で使う盤面とパーを、クリア画面を見ている間に用意しておく(お気に入り・自作のテストには「次」が無い)。
         if (!current.isImported) prefetchNextPar(current.level + 1, current.combo)
 
@@ -1066,10 +1116,11 @@ class GameViewModel(
                 progressStore.recordLevelClear(current.level, livesLost, totalScore)
                 progressStore.recordLevelStars(current.level, stars)
                 // 戻す(Undo)での稼ぎ直しを数えないよう、森のなかまはクリア確定時にまとめて加える。
-                progressStore.addForestPopulation(levelScore)
+                if (forestGain > 0) progressStore.addForestPopulation(forestGain)
             }
             _uiState.update {
                 it.copy(
+                    levelForestCredited = it.levelForestCredited + forestGain,
                     bestLevel = newBest.level,
                     bestScore = newBest.score,
                     clearedLevels = it.clearedLevels + current.level,
@@ -1100,7 +1151,7 @@ class GameViewModel(
                     par,
                     stars,
                     couples,
-                    populationGain = if (current.isImported) 0 else levelScore,
+                    populationGain = forestGain,
                 ),
                 hasActiveRun = false,
                 clearFinale = if (finaleBursts.isNotEmpty()) ClearFinale(finaleBursts, token = System.nanoTime()) else null,

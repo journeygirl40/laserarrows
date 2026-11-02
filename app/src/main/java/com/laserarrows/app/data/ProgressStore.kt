@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,7 @@ class ProgressStore(private val context: Context) {
     // (古い「forest_stage_seen」はハイスコア基準の段階なので使わない)。
     private val forestStageSeenKey = intPreferencesKey("forest_stage_seen_stars")
     private val forestExpansionSeenKey = intPreferencesKey("forest_expansion_seen")
+    private val forestHiddenDecorKey = stringSetPreferencesKey("forest_hidden_decor")
     private val activeRunKey = stringPreferencesKey("active_run")
     private val clearedRunKey = stringPreferencesKey("cleared_run")
     private val levelListSortDescendingKey = booleanPreferencesKey("level_list_sort_descending")
@@ -162,6 +164,16 @@ class ProgressStore(private val context: Context) {
 
     suspend fun saveForestExpansionSeen(level: Int) {
         context.progressDataStore.edit { prefs -> prefs[forestExpansionSeenKey] = level }
+    }
+
+    /** タイトルの森で、解放済みのうち非表示にしたかざり(「L3」=にぎわい3段目、「W2」=広さ2段目)。 */
+    val forestHiddenDecor: Flow<Set<String>> = context.progressDataStore.data.map { prefs -> prefs[forestHiddenDecorKey] ?: emptySet() }
+
+    suspend fun setForestDecorVisible(key: String, visible: Boolean) {
+        context.progressDataStore.edit { prefs ->
+            val current = prefs[forestHiddenDecorKey] ?: emptySet()
+            prefs[forestHiddenDecorKey] = if (visible) current - key else current + key
+        }
     }
 
     /** 「なぞのたまご」の説明を一度見たか。 */

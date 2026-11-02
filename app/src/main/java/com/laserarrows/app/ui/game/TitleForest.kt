@@ -95,6 +95,9 @@ private val SLEEPERS = listOf(
     Resident(R.drawable.animal_rabbit, 0.62f, 0.6f, 52f, 0, Habit.SLEEP, 1.6f),
 )
 
+/** かざりのつける/外すを覚えておく時の名前(「L3」=にぎわい3段目、「W2」=広さ2段目)。 */
+fun forestDecorKey(kind: ForestGrowth, stage: Int): String = (if (kind == ForestGrowth.LIVELY) "L" else "W") + stage
+
 /** ホームの森で何が育ったのか。LIVELY=にぎわい(集めた★)、WIDE=広さ(森のなかまの累計)。 */
 enum class ForestGrowth { LIVELY, WIDE }
 
@@ -117,7 +120,14 @@ private val FLAG_COLORS = listOf(Color(0xFFFF6F61), Color(0xFFFFC84A), Color(0xF
  * 段階が上がった直後(celebration)は、増えたものがポンと現れ、ハートが弾けて「にぎやかになった!/広がった!」と知らせる。
  */
 @Composable
-fun TitleForest(level: Int, expansion: Int, celebration: ForestCelebration?, modifier: Modifier = Modifier) {
+fun TitleForest(
+    level: Int,
+    expansion: Int,
+    celebration: ForestCelebration?,
+    modifier: Modifier = Modifier,
+    /** 非表示にしたかざり(「L3」=にぎわい3段目、「W2」=広さ2段目)。 */
+    hidden: Set<String> = emptySet(),
+) {
     var time by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
@@ -145,7 +155,7 @@ fun TitleForest(level: Int, expansion: Int, celebration: ForestCelebration?, mod
 
     Box(modifier = modifier.fillMaxWidth().height(172.dp), contentAlignment = Alignment.TopCenter) {
         Canvas(modifier = Modifier.matchParentSize()) {
-            val scene = SceneScope(this, level, expansion, celebration, pop.value, time)
+            val scene = SceneScope(this, level, expansion, celebration, pop.value, time, hidden)
             scene.drawBackdrop()
             scene.drawRainbow()
             scene.drawMound()
@@ -295,7 +305,12 @@ private class SceneScope(
     val celebration: ForestCelebration?,
     val pop: Float,
     val t: Float,
+    val hidden: Set<String>,
 ) {
+    /** にぎわいの段階stageで増えるものを見せるか(届いていて、外していない)。1段目は森の基本なので外せない。 */
+    fun lively(stage: Int): Boolean = level >= stage && (stage <= 1 || forestDecorKey(ForestGrowth.LIVELY, stage) !in hidden)
+    val golden get() = lively(7)
+
     val w = ds.size.width
     val h = ds.size.height
     val u = h / 172f
@@ -305,6 +320,7 @@ private class SceneScope(
     /** 広さの段階stageで増えるものの、今の現れ具合(0=まだ無い、1=ある)。お祝い中の段階はpopに合わせて育つ。 */
     fun grown(stage: Int): Float = when {
         expansion < stage -> 0f
+        forestDecorKey(ForestGrowth.WIDE, stage) in hidden -> 0f
         celebration?.kind == ForestGrowth.WIDE && stage in celebration.from..celebration.to -> pop
         else -> 1f
     }
@@ -325,13 +341,13 @@ private class SceneScope(
     fun drawBackdrop() = with(ds) {
         // 丘の後ろの柔らかな光。しずかな森は朝もやの青白さ、育つほど暖かく、黄金の森は金色に。
         val glow = when {
-            level >= 7 -> Color(0xFFFFD86B).copy(alpha = 0.6f)
+            golden -> Color(0xFFFFD86B).copy(alpha = 0.6f)
             level == 0 -> Color(0xFFE3EEF7).copy(alpha = 0.5f)
             else -> Color(0xFFFFF4D6).copy(alpha = 0.35f + 0.04f * level)
         }
         val c = Offset(cx, moundY - 50f * u)
         drawCircle(Brush.radialGradient(listOf(glow, glow.copy(alpha = 0f)), center = c, radius = 150f * u), radius = 150f * u, center = c)
-        if (level >= 7) {
+        if (golden) {
             // 黄金の森: 上から差し込む光の筋がゆっくり回る。
             clipRect {
                 val origin = Offset(cx, -20f * u)
@@ -371,7 +387,7 @@ private class SceneScope(
             size = Size(rx * 2f, ry * 2f),
         )
         drawOval(Color.White.copy(alpha = 0.2f), topLeft = Offset(cx - rx * 0.78f, moundY - ry * 0.9f), size = Size(rx * 1.56f, ry * 0.8f))
-        if (level >= 7) {
+        if (golden) {
             drawOval(
                 GoldColor.copy(alpha = 0.55f + 0.2f * sin(t * 2f)),
                 topLeft = Offset(cx - rx, moundY - ry),
@@ -390,7 +406,7 @@ private class SceneScope(
             Triple(0.92f, 66f, 2),
         )
         trees.forEach { (xf, sizeU, from) ->
-            if (level < from) return@forEach
+            if (level < from || (from >= 2 && !lively(from))) return@forEach
             val far = sizeU < 50f
             val base = groundAt(xf, if (far) -0.15f else 0.05f)
             val s = sizeU * u
@@ -436,7 +452,7 @@ private class SceneScope(
     }
 
     fun drawBunting() = with(ds) {
-        if (level < 6) return@with
+        if (!lively(6)) return@with
         // おまつりの森: 木から木へ旗飾りを渡す。旗は風にはためく。
         val left = Offset(w * 0.06f, 30f * u)
         val right = Offset(w * 0.94f, 30f * u)
@@ -463,7 +479,7 @@ private class SceneScope(
     }
 
     fun drawResidents(art: Map<Int, ImageBitmap>) {
-        val cast = if (level == 0) SLEEPERS else RESIDENTS.filter { it.intro <= level }
+        val cast = if (level == 0) SLEEPERS else RESIDENTS.filter { it.intro <= level && lively(it.intro) }
         val c = celebration
         cast.sortedBy { it.depth }.forEach { r ->
             val image = art[r.art] ?: return@forEach
@@ -585,7 +601,7 @@ private class SceneScope(
     }
 
     fun drawButterflies() = with(ds) {
-        if (level < 3) return@with
+        if (!lively(3)) return@with
         val colors = listOf(Color(0xFFFFA6C9), Color(0xFFFFE07A), Color(0xFFA9D8FF), Color(0xFFD3B5FF), Color(0xFFFFC08A))
         repeat((level - 2).coerceAtMost(5)) { i ->
             val fi = i.toFloat()
@@ -616,10 +632,10 @@ private class SceneScope(
     }
 
     fun drawSparkles() = with(ds) {
-        if (level < 6) return@with
+        if (!lively(6) && !golden) return@with
         val rnd = Random(11)
-        val count = if (level >= 7) 18 else 9
-        val color = if (level >= 7) Color(0xFFFFE27A) else Color.White
+        val count = if (golden) 18 else 9
+        val color = if (golden) Color(0xFFFFE27A) else Color.White
         repeat(count) { i ->
             val p = Offset(rnd.nextFloat() * w, rnd.nextFloat() * (moundY - 10f * u))
             val tw = abs(sin(t * (1.6f + rnd.nextFloat()) + i))

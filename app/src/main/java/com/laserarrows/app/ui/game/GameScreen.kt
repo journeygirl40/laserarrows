@@ -32,6 +32,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -136,6 +138,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 onForestStageCelebrated = { viewModel.onForestStageCelebrated(it) },
                 forestExpansionSeen = uiState.forestExpansionSeen,
                 onForestExpansionCelebrated = { viewModel.onForestExpansionCelebrated(it) },
+                forestHiddenDecor = uiState.forestHiddenDecor,
+                onForestDecorToggle = { key, visible -> viewModel.setForestDecorVisible(key, visible) },
                 totalStars = uiState.totalStars,
                 nextLevel = nextLevel,
                 hasActiveRun = uiState.hasActiveRun,
@@ -265,27 +269,74 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
             LoadingOverlay(progress = loadingProgress)
         }
 
-        uiState.toast?.let { toast ->
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .safeDrawingPadding()
-                    .padding(top = 8.dp)
-                    .padding(horizontal = 16.dp)
-                    .shadow(8.dp, RoundedCornerShape(20.dp))
-                    .background(GlassFill, RoundedCornerShape(20.dp))
-                    .border(2.dp, if (toast.isDanger) DangerColor else GoldColor, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 18.dp, vertical = 9.dp),
-            ) {
-                Text(
-                    toast.text,
-                    color = if (toast.isDanger) DangerColor else TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+        // プレイ画面では盤面のそばに出す(GameplayContent側)。それ以外の画面では上に出す。
+        val inGameplay = when (uiState.overlay) {
+            Overlay.None, is Overlay.Clear, is Overlay.GameOver, is Overlay.ColorPick, is Overlay.DirectionPick -> true
+            else -> false
+        }
+        if (!inGameplay) {
+            uiState.toast?.let { toast ->
+                ToastCard(
+                    toast,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 8.dp)
+                        .padding(horizontal = 16.dp),
                 )
             }
         }
     }
+    }
+}
+
+@Composable
+private fun ToastCard(toast: ToastMessage, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .shadow(8.dp, RoundedCornerShape(20.dp))
+            .background(GlassFill, RoundedCornerShape(20.dp))
+            .border(2.dp, if (toast.isDanger) DangerColor else GoldColor, RoundedCornerShape(20.dp))
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+    ) {
+        Text(
+            toast.text,
+            color = if (toast.isDanger) DangerColor else TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * プレイ中のメッセージを、盤面のすぐそばの空いている所に出す。
+ * 盤面の下に空きがあればすぐ下、無ければすぐ上、どちらも無ければ木枠の上端にまたがる位置(盤面にかかるのは最小限)。
+ * 触れる部品を持たないので、下にあるマスやボタンへのタップは邪魔しない。
+ */
+@Composable
+private fun BoardSideToast(toast: ToastMessage, panelHeightDp: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    key(toast.token) {
+        ToastCard(
+            toast,
+            modifier = modifier.layout { measurable, constraints ->
+                val side = with(density) { 16.dp.roundToPx() }
+                val gap = with(density) { 6.dp.roundToPx() }
+                val areaW = constraints.maxWidth
+                val areaH = constraints.maxHeight
+                val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0, maxWidth = (areaW - side * 2).coerceAtLeast(0)))
+                val panelH = with(density) { panelHeightDp.roundToPx() }.coerceAtMost(areaH)
+                val panelTop = (areaH - panelH) / 2
+                val panelBottom = panelTop + panelH
+                val y = when {
+                    areaH - panelBottom >= p.height + gap -> panelBottom + gap
+                    panelTop >= p.height + gap -> panelTop - gap - p.height
+                    else -> (panelTop - p.height / 2).coerceAtLeast(0)
+                }
+                layout(areaW, areaH) { p.place((areaW - p.width) / 2, y) }
+            },
+        )
     }
 }
 
@@ -496,6 +547,7 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                                     level = uiState.level,
                                     onNext = { viewModel.clearNext() },
                                     onHome = { viewModel.clearHome() },
+                                    onRetry = { viewModel.clearRetry() },
                                     onAddToFavorites = { memo -> viewModel.addCurrentBoardToFavorites(memo) },
                                     populationGain = overlay.populationGain,
                                     population = uiState.forestPopulation,
@@ -540,6 +592,9 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                             }
                         }
                     }
+                }
+                uiState.toast?.let { toast ->
+                    BoardSideToast(toast, panelHeightDp, Modifier.fillMaxSize())
                 }
             }
         }

@@ -3,6 +3,7 @@ package com.laserarrows.app.ui.game
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import com.laserarrows.app.ui.components.GhostButton
 import com.laserarrows.app.ui.components.NeonButton
 import com.laserarrows.app.ui.components.CenteredScroll
 import com.laserarrows.app.ui.components.isLandscape
+import com.laserarrows.app.ui.theme.GlassFill
 import com.laserarrows.app.ui.theme.GoldColor
 import com.laserarrows.app.ui.theme.Neon1
 import com.laserarrows.app.ui.theme.Neon1Edge
@@ -67,6 +69,8 @@ fun HomeOverlay(
     onForestStageCelebrated: (level: Int) -> Unit,
     forestExpansionSeen: Int?,
     onForestExpansionCelebrated: (level: Int) -> Unit,
+    forestHiddenDecor: Set<String>,
+    onForestDecorToggle: (key: String, visible: Boolean) -> Unit,
     totalStars: Int,
     nextLevel: Int,
     hasActiveRun: Boolean,
@@ -85,23 +89,22 @@ fun HomeOverlay(
 ) {
     var confirmingMode by remember { mutableStateOf<ChallengeMode?>(null) }
 
-    // 森の段階が上がっていたら、ホームに戻ってきた時に一度だけお祝いを見せる。
+    // 森の段階は、届いただけでは育たない。届いた分は「ごほうび」として森の上に出し、タップした時に解放してお祝いを見せる。
     // 集めた★で「にぎやかになった!」、森のなかまの累計で「森が広がった!」。両方ある時は順番に見せる。
-    val forestLevel = ForestStage.of(totalStars).level
-    val expansionLevel = ForestExpansion.of(forestPopulation).level
+    val reachedLively = ForestStage.of(totalStars).level
+    val reachedWide = ForestExpansion.of(forestPopulation).level
+    // 森に見せるのは、解放済みの段階まで(読み込み前は届いた段階のまま)。
+    val forestLevel = forestStageSeen?.coerceAtMost(reachedLively) ?: reachedLively
+    val expansionLevel = forestExpansionSeen?.coerceAtMost(reachedWide) ?: reachedWide
+    val pendingLively = forestStageSeen != null && reachedLively > forestStageSeen
+    val pendingWide = forestExpansionSeen != null && reachedWide > forestExpansionSeen
     val pending = remember { mutableStateListOf<ForestCelebration>() }
     var celebration by remember { mutableStateOf<ForestCelebration?>(null) }
-    fun enqueue(c: ForestCelebration) {
-        pending.removeAll { it.kind == c.kind && it != celebration }
-        if (c !in pending) pending += c
-    }
-    LaunchedEffect(forestLevel, forestStageSeen) {
-        if (forestStageSeen != null && forestLevel > forestStageSeen) enqueue(ForestCelebration(ForestGrowth.LIVELY, forestStageSeen + 1, forestLevel))
-    }
-    LaunchedEffect(expansionLevel, forestExpansionSeen) {
-        if (forestExpansionSeen != null && expansionLevel > forestExpansionSeen) {
-            enqueue(ForestCelebration(ForestGrowth.WIDE, forestExpansionSeen + 1, expansionLevel))
-        }
+    var showDecor by remember { mutableStateOf(false) }
+    fun unlockRewards() {
+        if (pending.isNotEmpty()) return
+        if (pendingLively) pending += ForestCelebration(ForestGrowth.LIVELY, forestStageSeen!! + 1, reachedLively)
+        if (pendingWide) pending += ForestCelebration(ForestGrowth.WIDE, forestExpansionSeen!! + 1, reachedWide)
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -113,6 +116,7 @@ fun HomeOverlay(
             }
             delay(FOREST_CELEBRATION_MS)
             pending.remove(next)
+            if (pending.isEmpty()) celebration = null
         }
     }
 
@@ -137,10 +141,29 @@ fun HomeOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TitleForest(level = forestLevel, expansion = expansionLevel, celebration = celebration)
+                Box(contentAlignment = Alignment.TopCenter) {
+                    TitleForest(level = forestLevel, expansion = expansionLevel, celebration = celebration, hidden = forestHiddenDecor)
+                    if ((pendingLively || pendingWide) && pending.isEmpty()) {
+                        ForestRewardGift(onClick = { unlockRewards() }, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
                 GameText("アニマル・リンク", fontSize = if (landscape) 30.sp else 38.sp, color = Color(0xFFFFF6DE), outline = WoodDark)
                 Spacer(modifier = Modifier.height(8.dp))
                 ForestProgressPill(totalStars = totalStars, population = forestPopulation)
+                // 解放したかざりが1つでもあれば、つける/外すを選べる入口を出す。
+                if (forestLevel >= 2 || expansionLevel >= 1) {
+                    Text(
+                        "🎨 森のかざりを選ぶ",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary,
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .background(GlassFill.copy(alpha = 0.88f), RoundedCornerShape(999.dp))
+                            .clickable { showDecor = true }
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
+                    )
+                }
             }
         }
         val actions = @Composable {
@@ -217,6 +240,15 @@ fun HomeOverlay(
                 Spacer(modifier = Modifier.weight(1f))
                 actions()
             }
+        }
+        if (showDecor) {
+            ForestDecorDialog(
+                livelyUnlocked = forestLevel,
+                wideUnlocked = expansionLevel,
+                hidden = forestHiddenDecor,
+                onToggle = onForestDecorToggle,
+                onClose = { showDecor = false },
+            )
         }
         confirmingMode?.let { mode ->
             val modeTitle = if (mode == ChallengeMode.HIGH_SCORE) "ハイスコアチャレンジ" else "レベルアップチャレンジ"

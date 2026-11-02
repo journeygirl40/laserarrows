@@ -140,6 +140,8 @@ data class GameUiState(
     val forestStageSeen: Int? = null,
     /** 森の広さの段階をどこまで見届けたか。読み込み前はnull(その間は「森が広がった!」を出さない)。 */
     val forestExpansionSeen: Int? = null,
+    /** タイトルの森で非表示にしたかざり(「L3」「W2」など)。 */
+    val forestHiddenDecor: Set<String> = emptySet(),
     /** 「なぞのたまご」の説明を今表示しているか(初めてたまごが出た盤面で一度だけ)。 */
     val showEggIntro: Boolean = false,
     /** 「なかまの増え方」の説明を見たことがあるか。読み込み前はnull(その間は自動では出さない)。 */
@@ -148,6 +150,8 @@ data class GameUiState(
     val showScoreHelp: Boolean = false,
     /** 盤面を作っている最中の進捗(0〜1)。作っていない時はnull。1秒以上かかる時だけ読み込みバーを出す。 */
     val loadingProgress: Float? = null,
+    /** このレベルで既に森のなかまに加えた数。クリア画面から「やり直す」で再挑戦した時は、前回を上回った分だけ加える(同じ盤面の繰り返しで稼げないように)。 */
+    val levelForestCredited: Int = 0,
     /** 今の盤面のパー(レベル開始時点のコンボから取れる理論上の最高点)。計算中はnull。 */
     val par: ParResult? = null,
     val importHistory: List<ImportHistoryEntry> = emptyList(),

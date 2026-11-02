@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.laserarrows.app.ui.components.GhostButton
@@ -67,6 +68,7 @@ fun ClearOverlay(
     level: Int,
     onNext: () -> Unit,
     onHome: () -> Unit,
+    onRetry: () -> Unit,
     onAddToFavorites: (memo: String) -> Unit,
     populationGain: Int,
     population: Int,
@@ -80,6 +82,8 @@ fun ClearOverlay(
         isImported -> "⭐ お気に入りに戻る"
         else -> "🏠 ホームへ"
     }
+    // ★3に届かなかった時だけ、このステージを最初からやり直せる(お気に入り・自作のテストは対象外)。
+    val canRetry = !isImported && stars < 3
     var addingFavorite by remember { mutableStateOf(false) }
     var addedFavorite by remember { mutableStateOf(false) }
     var memo by remember { mutableStateOf("") }
@@ -103,6 +107,15 @@ fun ClearOverlay(
                 fontWeight = FontWeight.Bold,
                 color = if (levelScore >= par) GoldText else TextPrimary,
             )
+            if (canRetry) {
+                Text(
+                    "💡 同じ組み合わせでも、撃つ順番で数が変わります\n道案内の矢印が残っているうちに曲がる手を撃とう",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Text("ここまでの合計 なかま${totalScore}匹", fontSize = 12.sp, color = TextMuted)
 
             Box(
@@ -156,6 +169,9 @@ fun ClearOverlay(
         if (!isImported) {
             // メインの行き先: 次のレベルへ(いちばん大きく、ボタンの先頭)。
             NeonButton("次のレベルへ ▶", onClick = onNext, enabled = actionsReady, modifier = Modifier.fillMaxWidth())
+            if (canRetry) {
+                GhostButton("🔄 ★3をめざしてやり直す", onClick = onRetry, enabled = actionsReady, modifier = Modifier.fillMaxWidth())
+            }
             // サブの行き先: ホームへ / お気に入りへ登録(小さめ、次へのすぐ下)。
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 GhostButton(homeLabel, onClick = onHome, enabled = actionsReady, compact = true, modifier = Modifier.weight(1f))
