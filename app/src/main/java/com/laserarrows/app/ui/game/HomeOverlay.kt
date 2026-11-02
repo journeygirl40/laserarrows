@@ -59,8 +59,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 
-private enum class ChallengeMode { HIGH_SCORE, LEVEL_UP }
-
 @Composable
 fun HomeOverlay(
     bestScore: Int,
@@ -77,8 +75,7 @@ fun HomeOverlay(
     activeLevel: Int,
     activeScore: Int,
     activeLives: Int,
-    onHighScoreChallenge: () -> Unit,
-    onLevelUpChallenge: () -> Unit,
+    onStartNext: () -> Unit,
     onResume: () -> Unit,
     onShowList: () -> Unit,
     onShowFavorites: () -> Unit,
@@ -87,7 +84,7 @@ fun HomeOverlay(
     onShowAnimals: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var confirmingMode by remember { mutableStateOf<ChallengeMode?>(null) }
+    var confirmingStart by remember { mutableStateOf(false) }
 
     // 森の段階は、届いただけでは育たない。届いた分は「ごほうび」として森の上に出し、タップした時に解放してお祝いを見せる。
     // 集めた★で「にぎやかになった!」、森のなかまの累計で「森が広がった!」。両方ある時は順番に見せる。
@@ -120,16 +117,9 @@ fun HomeOverlay(
         }
     }
 
-    fun startMode(mode: ChallengeMode) {
-        when (mode) {
-            ChallengeMode.HIGH_SCORE -> onHighScoreChallenge()
-            ChallengeMode.LEVEL_UP -> onLevelUpChallenge()
-        }
-    }
-
-    // ラン中に別モードを選ぶと今の進行状況が消えるため、その時だけ一度確認を挟む。
-    fun onCardTap(mode: ChallengeMode) {
-        if (hasActiveRun) confirmingMode = mode else startMode(mode)
+    // 遊ぶ入口は「続きから」と「Lv.○から遊ぶ」の2つだけ。ラン中に新しく始めると今の進行状況が消えるため、その時だけ一度確認を挟む。
+    fun onStartTap() {
+        if (hasActiveRun) confirmingStart = true else onStartNext()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -181,31 +171,15 @@ fun HomeOverlay(
                     )
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                StartCard(
+                    nextLevel = nextLevel,
+                    bestScore = bestScore,
+                    // 続きがある時は「続きから」が主役なので、こちらは「新しく始める」と分かる言い方にして一段控えめにする。
+                    secondary = hasActiveRun,
+                    compact = landscape,
+                    onClick = { onStartTap() },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ChallengeCard(
-                        icon = R.drawable.icon_trophy,
-                        title = "ハイスコア\nチャレンジ",
-                        tagline = "コンボを繋いでベストを更新しよう",
-                        badgeText = "ベスト ${bestScore}匹",
-                        accentColor = PurpleAccent,
-                        compact = landscape,
-                        onClick = { onCardTap(ChallengeMode.HIGH_SCORE) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    ChallengeCard(
-                        icon = R.drawable.icon_rocket,
-                        title = "レベルアップ\nチャレンジ",
-                        tagline = "どんどん先へ進んで森を広げよう",
-                        badgeText = "Lv.$nextLevel から",
-                        accentColor = Neon2,
-                        compact = landscape,
-                        onClick = { onCardTap(ChallengeMode.LEVEL_UP) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     MenuTile(R.drawable.icon_scroll, "レベル一覧", onShowList, Modifier.weight(1f), badge = if (totalStars > 0) "★$totalStars" else null)
@@ -250,8 +224,7 @@ fun HomeOverlay(
                 onClose = { showDecor = false },
             )
         }
-        confirmingMode?.let { mode ->
-            val modeTitle = if (mode == ChallengeMode.HIGH_SCORE) "ハイスコアチャレンジ" else "レベルアップチャレンジ"
+        if (confirmingStart) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -264,7 +237,7 @@ fun HomeOverlay(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text("${modeTitle}を始めますか？", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("Lv.${nextLevel}から新しく始めますか？", fontSize = 16.sp, fontWeight = FontWeight.Black, color = TextPrimary)
                             Text(
                                 "現在プレイ中のLv.${activeLevel}(なかま${activeScore}匹)の進行状況は消えます。",
                                 fontSize = 12.5.sp,
@@ -272,12 +245,12 @@ fun HomeOverlay(
                                 textAlign = TextAlign.Center,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                GhostButton("キャンセル", onClick = { confirmingMode = null }, modifier = Modifier.weight(1f))
+                                GhostButton("キャンセル", onClick = { confirmingStart = false }, modifier = Modifier.weight(1f))
                                 NeonButton(
                                     "始める",
                                     onClick = {
-                                        startMode(mode)
-                                        confirmingMode = null
+                                        onStartNext()
+                                        confirmingStart = false
                                     },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -325,43 +298,50 @@ private fun ContinueButton(
     }
 }
 
-/** モード選択カード。関連する自己記録をバッジで見せ、「これを超えたい」という気持ちを起点にモードを選んでもらう。 */
+/**
+ * 新しく遊び始める入口(ひとつだけ)。まだクリアしていない次のレベルから始まる。
+ * ハイスコアもここで伸ばすので自己ベストを札で見せ、遊び直したいレベルは「レベル一覧」へ案内する。
+ * 続きがある時(secondary)は「続きから」が主役なので、「新しく始める」と分かる言い方で一段控えめに見せる。
+ */
 @Composable
-private fun ChallengeCard(
-    @DrawableRes icon: Int,
-    title: String,
-    tagline: String,
-    badgeText: String,
-    accentColor: Color,
+private fun StartCard(
+    nextLevel: Int,
+    bestScore: Int,
+    secondary: Boolean,
+    compact: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
 ) {
     CreamCard(modifier = modifier, onClick = onClick, contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact || secondary) 10.dp else 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(44.dp))
+            Image(painterResource(R.drawable.icon_rocket), contentDescription = null, modifier = Modifier.size(if (secondary) 34.dp else 46.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    if (secondary) "Lv.${nextLevel}から新しく始める" else "Lv.${nextLevel}から遊ぶ",
+                    fontSize = if (secondary) 15.sp else 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = TextPrimary,
+                )
+                // 横向きの低い画面では、ひとこと説明を省いてカードを低くする。
+                if (!compact) {
+                    Text("まだクリアしていない次のレベルから。遊び直しは「レベル一覧」で", fontSize = 10.5.sp, color = TextMuted)
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Black,
-                color = TextPrimary,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp,
-            )
-            // 横向きの低い画面では、ひとこと説明を省いてカードを低くする。
-            if (!compact) Text(tagline, fontSize = 10.sp, color = TextMuted, textAlign = TextAlign.Center)
-            Text(
-                badgeText,
-                fontSize = 11.5.sp,
+                "ベスト\n${bestScore}匹",
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Black,
                 color = Color.White,
+                textAlign = TextAlign.Center,
+                lineHeight = 13.sp,
                 modifier = Modifier
-                    .background(accentColor, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .background(PurpleAccent, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
     }

@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.alpha
@@ -146,8 +147,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 activeLevel = uiState.level,
                 activeScore = uiState.score,
                 activeLives = uiState.lives,
-                onHighScoreChallenge = { viewModel.goStart() },
-                onLevelUpChallenge = { viewModel.goContinue() },
+                onStartNext = { viewModel.goContinue() },
                 onResume = { viewModel.resume() },
                 onShowList = { viewModel.goList() },
                 onShowFavorites = { viewModel.goFavorites() },
@@ -205,7 +205,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel(factory = GameViewModel.Fact
                 history = uiState.importHistory,
                 sortKey = uiState.favoriteSortKey,
                 sortDescending = uiState.favoriteSortDescending,
-                hasActiveRun = uiState.hasActiveRun,
+                // お気に入りは単発のゲームで「続きから」を上書きしないので、選ぶ前の確認は要らない。
+                hasActiveRun = false,
                 activeLevel = uiState.level,
                 onSetSortKey = { viewModel.setFavoriteSortKey(it) },
                 onSetSortDescending = { viewModel.setFavoriteSortDescending(it) },
@@ -430,6 +431,13 @@ private fun GameplayContent(uiState: GameUiState, viewModel: GameViewModel, cont
                         .background(Brush.verticalGradient(listOf(BoardGrass, BoardGrassDark)), RoundedCornerShape(19.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // 芝生の下に、自分が育てた森。空いたマスとすき間から透けて見える。
+                    ForestBackdrop(
+                        level = uiState.unlockedForestLively,
+                        expansion = uiState.unlockedForestWide,
+                        hidden = uiState.forestHiddenDecor,
+                        modifier = Modifier.matchParentSize().clip(RoundedCornerShape(19.dp)),
+                    )
                     if (hasBoard) {
                         Box(modifier = Modifier.size(boardWidthDp, boardHeightDp)) {
                             BoardView(

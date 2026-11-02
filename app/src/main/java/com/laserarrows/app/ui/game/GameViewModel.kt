@@ -93,7 +93,7 @@ class GameViewModel(
             // 復元処理より前に監視を始めると、復元前の初期状態を保存して既存のデータを消してしまうため、必ず復元後に開始する。
             // テストプレイ中は本来のラン(savedRunに退避済み)を上書きしたくないので、その間は保存自体をスキップする。
             launch {
-                uiState.filter { !it.isEditorTest }.map { serializeActiveRun(it) }.distinctUntilChanged().collect { serialized ->
+                uiState.filter { !it.isEditorTest && !it.isImported }.map { serializeActiveRun(it) }.distinctUntilChanged().collect { serialized ->
                     progressStore.saveActiveRun(serialized)
                 }
             }
@@ -268,7 +268,6 @@ class GameViewModel(
     private fun maxLevelReached(): Int = _uiState.value.clearedLevels.maxOrNull() ?: 0
 
     // ---- 画面遷移 ----
-    fun goStart() = newRun(1)
     fun goContinue() = newRun(maxLevelReached() + 1)
     fun goList(excludePerfect: Boolean = false) = _uiState.update {
         it.copy(overlay = Overlay.LevelList, levelListExcludePerfect = excludePerfect)
@@ -294,7 +293,7 @@ class GameViewModel(
     fun gameOverHome() = _uiState.update {
         when {
             it.isEditorTest -> restoreFromEditorTest(it).copy(overlay = Overlay.Editor)
-            it.isImported -> it.copy(overlay = Overlay.Favorites)
+            it.isImported -> restoreFromEditorTest(it).copy(overlay = Overlay.Favorites)
             else -> it.copy(overlay = Overlay.Home)
         }
     }
@@ -304,7 +303,7 @@ class GameViewModel(
         val current = _uiState.value
         when {
             current.isEditorTest -> _uiState.update { restoreFromEditorTest(it).copy(overlay = Overlay.Editor) }
-            current.isImported -> _uiState.update { it.copy(overlay = Overlay.Favorites) }
+            current.isImported -> _uiState.update { restoreFromEditorTest(it).copy(overlay = Overlay.Favorites) }
             else -> {
                 _uiState.update { it.copy(level = current.level + 1) }
                 startLevel(targetOverlay = Overlay.Home)
@@ -318,7 +317,8 @@ class GameViewModel(
         if (current.busy) return
         _uiState.update {
             val wasEditorTest = it.isEditorTest
-            val restored = if (wasEditorTest) restoreFromEditorTest(it) else it
+            // テストプレイ・お気に入りの単発プレイを抜ける時は、退避しておいた本来のランに戻す。
+            val restored = if (wasEditorTest || it.isImported) restoreFromEditorTest(it) else it
             restored.copy(
                 overlay = if (wasEditorTest) Overlay.Editor else Overlay.Home,
                 addingLight = false,
@@ -327,11 +327,15 @@ class GameViewModel(
         }
     }
 
-    /** テストプレイを抜ける際、退避しておいた本来のラン([SavedRun])があればそれに戻す。無ければ(テスト前にランが無かった場合)アクティブランなしの状態にする。 */
+    /**
+     * テストプレイ・お気に入りの単発プレイを抜ける際、退避しておいた本来のラン([SavedRun])があればそれに戻す。
+     * 無ければ(単発プレイの前にランが無かった場合)アクティブランなしの状態にする。
+     */
     private fun restoreFromEditorTest(state: GameUiState): GameUiState {
         val saved = state.savedRun
+        val cleaned = state.copy(hint = null, clearFinale = null, activeShot = null, busy = false, comboPopup = null, scoreBonusPopup = null)
         return if (saved != null) {
-            state.copy(
+            cleaned.copy(
                 level = saved.level,
                 score = saved.score,
                 combo = saved.combo,
@@ -346,13 +350,38 @@ class GameViewModel(
                 crossedHighScoreThisRun = saved.crossedHighScoreThisRun,
                 crossedLevelRecordThisRun = saved.crossedLevelRecordThisRun,
                 par = saved.par,
+                levelForestCredited = saved.levelForestCredited,
                 hasActiveRun = true,
                 isEditorTest = false,
                 savedRun = null,
             )
         } else {
-            state.copy(hasActiveRun = false, isEditorTest = false, savedRun = null)
+            cleaned.copy(hasActiveRun = false, isEditorTest = false, isImported = false, activeFavoriteImportedAt = null, savedRun = null)
         }
+    }
+
+    /** 単発プレイ(テストプレイ・お気に入り)に入る前に、本来のランを退避する。既に単発プレイ中なら、退避済みのものをそのまま引き継ぐ。 */
+    private fun captureSavedRun(it: GameUiState): SavedRun? =
+        if (it.hasActiveRun && !it.isEditorTest && !it.isImported) {
+            SavedRun(
+                level = it.level,
+                score = it.score,
+                combo = it.combo,
+                lives = it.lives,
+                board = it.board,
+                remainingReceivers = it.remainingReceivers,
+                history = it.history,
+                levelSnapshot = it.levelSnapshot,
+                isImported = it.isImported,
+                activeFavoriteImportedAt = it.activeFavoriteImportedAt,
+                bestScoreAtRunStart = it.bestScoreAtRunStart,
+                crossedHighScoreThisRun = it.crossedHighScoreThisRun,
+                crossedLevelRecordThisRun = it.crossedLevelRecordThisRun,
+                par = it.par,
+                levelForestCredited = it.levelForestCredited,
+            )
+        } else {
+            it.savedRun
     }
 
     /** ホームから、保持しておいたプレイ中の状態にそのまま戻る。 */
@@ -404,7 +433,11 @@ class GameViewModel(
         showToast("🔄 最初からやり直し! 撃つ順番を変えてみよう")
     }
 
-    fun selectLevel(level: Int) = newRun(level)
+    /** レベル一覧から選んで始める。選べるのはクリア済みのレベルと、その次の1つまで。 */
+    fun selectLevel(level: Int) {
+        if (level < 1 || level > maxLevelReached() + 1) return
+        newRun(level)
+    }
     fun debugGoToLevel(level: Int) {
         if (level < 1) return
         newRun(level)
@@ -608,6 +641,8 @@ class GameViewModel(
         // 由来レベルが分からない盤面(生コードの読み込み等)は、ペア数からおおよその相当レベルを逆算して見せる。
         val displayLevel = level ?: PuzzleGenerator.estimateLevelForBoard(board)
         _uiState.update {
+            // お気に入り・インポートの盤面は単発のゲーム。本来のランは退避しておき、抜けたら「続きから」で戻れるようにする。
+            val savedRun = captureSavedRun(it)
             GameUiState(
                 overlay = Overlay.None,
                 level = displayLevel,
@@ -632,6 +667,8 @@ class GameViewModel(
                 hasActiveRun = true,
                 isImported = true,
                 activeFavoriteImportedAt = importedAt,
+                savedRun = savedRun,
+                editorState = it.editorState,
             )
         }
         refreshPar()
@@ -688,26 +725,7 @@ class GameViewModel(
         val displayLevel = PuzzleGenerator.estimateLevelForBoard(board)
         _uiState.update {
             // テスト前に本来のランが進行中だった場合は、テストで上書きされないよう退避しておく。
-            val savedRun = if (it.hasActiveRun && !it.isEditorTest) {
-                SavedRun(
-                    level = it.level,
-                    score = it.score,
-                    combo = it.combo,
-                    lives = it.lives,
-                    board = it.board,
-                    remainingReceivers = it.remainingReceivers,
-                    history = it.history,
-                    levelSnapshot = it.levelSnapshot,
-                    isImported = it.isImported,
-                    activeFavoriteImportedAt = it.activeFavoriteImportedAt,
-                    bestScoreAtRunStart = it.bestScoreAtRunStart,
-                    crossedHighScoreThisRun = it.crossedHighScoreThisRun,
-                    crossedLevelRecordThisRun = it.crossedLevelRecordThisRun,
-                    par = it.par,
-                )
-            } else {
-                it.savedRun
-            }
+            val savedRun = captureSavedRun(it)
             GameUiState(
                 overlay = Overlay.None,
                 level = displayLevel,

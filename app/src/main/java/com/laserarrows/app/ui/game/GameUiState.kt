@@ -49,6 +49,7 @@ data class SavedRun(
     val crossedHighScoreThisRun: Boolean,
     val crossedLevelRecordThisRun: Boolean,
     val par: ParResult?,
+    val levelForestCredited: Int = 0,
 )
 
 data class ShotAnimation(
@@ -165,7 +166,7 @@ data class GameUiState(
     /** 現在プレイ中の盤面が由来するお気に入り/インポート履歴エントリのID(importedAt)。クリア時にそのエントリの記録を更新するために使う。 */
     val activeFavoriteImportedAt: Long? = null,
     val isEditorTest: Boolean = false,
-    /** テストプレイに入る前の本来のラン。テストを抜けたタイミングで復元する。 */
+    /** 単発プレイ(テストプレイ・お気に入り)に入る前の本来のラン。抜けたタイミングで復元する。 */
     val savedRun: SavedRun? = null,
     val editorState: EditorState = EditorState(),
     /** 最後に教えてもらったヒント(表示するのは、今の盤面がその時のままの間だけ)。 */
@@ -177,6 +178,10 @@ data class GameUiState(
     val shownHint: HintMove? get() = hint?.takeIf { it.board == board }
 
     val totalStars: Int get() = levelStars.values.sum()
+
+    /** 森のにぎわい・広さのうち、ごほうびとして解放済みの段階(読み込み前は届いた段階)。 */
+    val unlockedForestLively: Int get() = ForestStage.of(totalStars).level.let { reached -> forestStageSeen?.coerceAtMost(reached) ?: reached }
+    val unlockedForestWide: Int get() = ForestExpansion.of(forestPopulation).level.let { reached -> forestExpansionSeen?.coerceAtMost(reached) ?: reached }
 
     /** 今のレベルの盤面(始まった時の状態)が、もうお気に入りに入っているか。 */
     val isCurrentBoardFavorite: Boolean

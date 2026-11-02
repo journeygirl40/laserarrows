@@ -255,7 +255,8 @@ private fun EmptyCell(sizeDp: Dp, shape: RoundedCornerShape, tappable: Boolean, 
     var m = Modifier
         .fillMaxSize()
         .padding(start = sizeDp * 0.08f, end = sizeDp * 0.08f, top = sizeDp * 0.08f, bottom = sizeDp * (0.08f + TILE_EDGE))
-        .background(if (tappable) Color.White.copy(alpha = 0.55f) else BoardGrassDark.copy(alpha = 0.7f), shape)
+        // 空いたマスは薄めのくぼみにして、下に敷いた森が透けて見えるようにする。
+        .background(if (tappable) Color.White.copy(alpha = 0.55f) else BoardGrassDark.copy(alpha = 0.4f), shape)
     if (tappable) m = m.border(1.5.dp, GoldColor.copy(alpha = 0.7f), shape).clickable(onClick = onClick)
     Box(modifier = m, contentAlignment = Alignment.Center) {
         if (tappable) Text("+", color = GoldColor.copy(alpha = 0.8f), fontWeight = FontWeight.Black)

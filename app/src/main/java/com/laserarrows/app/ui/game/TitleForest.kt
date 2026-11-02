@@ -210,6 +210,55 @@ fun TitleForest(
 }
 
 /**
+ * 盤面の芝生の下に敷く、自分が育てた森。動物のマスに隠れ、空いたマスとすき間から淡く透けて見える
+ * (二人が出会ってマスが空くほど森が見えてくる)。遊びの邪魔にならないよう、薄く・ゆっくり見せ、タップも受けない。
+ * 森の横長の比率(およそ2:1)を保って盤面の下側に置き、縦長の盤面で住人が大きくなりすぎないようにする。
+ */
+@Composable
+fun ForestBackdrop(level: Int, expansion: Int, hidden: Set<String>, modifier: Modifier = Modifier) {
+    var time by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        val start = withFrameNanos { it }
+        // 盤面の後ろでは、ホームより動きをゆっくりにして目を引きすぎないようにする。
+        while (true) withFrameNanos { time = (it - start) / 1_000_000_000f * 0.6f }
+    }
+    val residentArt = (RESIDENTS + SLEEPERS).map { it.art }.distinct().associateWith { ImageBitmap.imageResource(it) }
+    val tree = ImageBitmap.imageResource(R.drawable.icon_tree)
+    val seedling = ImageBitmap.imageResource(R.drawable.icon_seedling)
+    val house = ImageBitmap.imageResource(R.drawable.icon_house)
+    val heart = ImageBitmap.imageResource(R.drawable.icon_heart)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
+        val sceneHeight = minOf(maxHeight, maxWidth * 0.55f)
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(sceneHeight)
+                .alpha(FOREST_BACKDROP_ALPHA),
+        ) {
+            val scene = SceneScope(this, level, expansion, null, 1f, time, hidden)
+            scene.drawBackdrop()
+            scene.drawRainbow()
+            scene.drawMound()
+            scene.drawStream()
+            scene.drawPond()
+            scene.drawBigTree(tree, house)
+            scene.drawTrees(tree, seedling, house)
+            scene.drawFlowers()
+            scene.drawBunting()
+            scene.drawResidents(residentArt)
+            scene.drawButterflies()
+            scene.drawFireflies()
+            scene.drawFloatingHearts(heart)
+            scene.drawSparkles()
+        }
+    }
+}
+
+/** 盤面の後ろの森の濃さ。マスの上の動物や光の道筋より、はっきり一段控えめにする。 */
+private const val FOREST_BACKDROP_ALPHA = 0.6f
+
+/**
  * タイトル下の森の育ち具合の札。上段=集めた★の数(にぎわい)、下段=集めたなかまの累計(広さ)。
  * それぞれ次の段階まであと何匹かを見せ、どのモードを遊べば何が育つのかが一目でわかるようにする。
  * 「Lv.」はレベル(盤面の番号)だけに使うので、ここでは段階を番号では呼ばず、森の名前だけで見せる。

@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -73,7 +74,10 @@ fun LevelListOverlay(
     modifier: Modifier = Modifier,
 ) {
     val maxLv = clearedLevels.maxOrNull() ?: 0
-    val upperBound = maxOf(maxLv + 1, 30)
+    // 選べるのは、クリア済みのレベルと次の1つ(nextLv)まで。その先は今の星座の終わりまで鍵つきで見せて、
+    // 「ここを越えると次が開く」ことだけ伝える(未到達の先のレベルへ飛べないようにする)。
+    val nextLv = maxLv + 1
+    val upperBound = constellationLevels(constellationIndex(nextLv)).last
     var excludePerfect by remember { mutableStateOf(initialExcludePerfect) }
     // レベル一覧からの選択は必ず新規ランを開始する(newRun)ため、再開可能なランが残っていると気付かず上書きされてしまう。
     // そのため選択前に一度だけ確認を挟み、誤タップで進行中のランを失わないようにする。
@@ -117,7 +121,7 @@ fun LevelListOverlay(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "次の一手を選ぶたび、少しだけ未来が開いていく。",
+                        "クリアしたレベルの遊び直しと、次のレベルに挑戦できます。",
                         fontSize = 13.sp,
                         color = TextMuted,
                         textAlign = TextAlign.Start,
@@ -183,8 +187,11 @@ fun LevelListOverlay(
                             bestLivesLost = levelBestLivesLost[lv],
                             bestScore = levelBestScore[lv],
                             stars = levelStars[lv] ?: 0,
-                            isNext = lv == maxLv + 1,
+                            isNext = lv == nextLv,
+                            locked = lv > nextLv,
+                            unlockHint = "Lv.${lv - 1}をクリアすると解放",
                             onClick = {
+                                if (lv > nextLv) return@LevelListItem
                                 if (hasActiveRun) {
                                     confirmingLevel = lv
                                 } else {
@@ -246,6 +253,8 @@ private fun LevelListItem(
     bestScore: Int?,
     stars: Int,
     isNext: Boolean,
+    locked: Boolean,
+    unlockHint: String,
     onClick: () -> Unit,
 ) {
     val perfect = cleared && (bestLivesLost == null || bestLivesLost == 0)
@@ -254,7 +263,11 @@ private fun LevelListItem(
         cleared -> GoldColor
         else -> TextMuted.copy(alpha = 0.5f)
     }
-    CreamCard(modifier = Modifier.fillMaxWidth(), onClick = onClick, face = if (isNext) Color(0xFFF0FBE6) else GlassFill) {
+    CreamCard(
+        modifier = Modifier.fillMaxWidth().alpha(if (locked) 0.55f else 1f),
+        onClick = if (locked) null else onClick,
+        face = if (isNext) Color(0xFFF0FBE6) else GlassFill,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -268,11 +281,19 @@ private fun LevelListItem(
                 contentAlignment = Alignment.Center,
             ) {
                 Text("$level", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.White)
+                if (locked) {
+                    Image(
+                        painterResource(R.drawable.icon_lock),
+                        contentDescription = "未解放",
+                        modifier = Modifier.size(20.dp).align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp),
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     when {
+                        locked -> unlockHint
                         isNext -> "次の挑戦！"
                         perfect -> "パーフェクト"
                         cleared -> "クリア(ライフ-$bestLivesLost)"
